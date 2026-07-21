@@ -12,7 +12,10 @@ use hyperintel_core::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{MARKET_STATE_SLICE_V1, SignedCapacityOfferV1, verify_signed_capacity_offer_v1};
+use crate::{
+    MARKET_STATE_SLICE_V1, SignedCapacityOfferV1, SignedReliabilityArtifactV1,
+    verify_offer_reliability_v1, verify_signed_capacity_offer_v1,
+};
 
 /// Complete pure-data routing inputs.
 pub struct RoutingContextV1<'a> {
@@ -51,6 +54,28 @@ pub struct SignedRoutingContextV1<'a> {
     /// Content-addressed evidence bytes.
     pub assurance_blobs: &'a BTreeMap<Sha256Digest, Vec<u8>>,
     /// Caller-owned verification-key registry.
+    pub verification_keys: &'a VerificationKeyRegistry,
+}
+
+/// Signed-offer routing inputs with caller-supplied typed reliability artifacts.
+pub struct ReliabilityArtifactVerifiedRoutingContextV1<'a> {
+    /// Explicit evaluation time. No ambient clock is read.
+    pub evaluated_at: &'a UtcTimestamp,
+    /// Required service semantics.
+    pub service: &'a ServiceSpecV1,
+    /// Provider registry snapshot keyed by provider ID.
+    pub providers: &'a BTreeMap<hyperintel_core::ProtocolId, ProviderIdentityV1>,
+    /// Candidate offers with provider signatures over their exact canonical digests.
+    pub offers: &'a [SignedCapacityOfferV1],
+    /// Buyer policy and economic authorization.
+    pub policy: &'a InferenceRequestPolicyV1,
+    /// Generic assurance evidence sets keyed by evidence-set digest.
+    pub assurance_sets: &'a BTreeMap<Sha256Digest, AssuranceEvidenceSetV1>,
+    /// Content-addressed assurance evidence bytes.
+    pub assurance_blobs: &'a BTreeMap<Sha256Digest, Vec<u8>>,
+    /// Typed reliability artifacts keyed by their canonical artifact digests.
+    pub reliability_artifacts: &'a BTreeMap<Sha256Digest, SignedReliabilityArtifactV1>,
+    /// Caller-owned verification-key registry for assurance, offer, and reliability keys.
     pub verification_keys: &'a VerificationKeyRegistry,
 }
 
@@ -102,6 +127,8 @@ pub enum EligibilityFailureV1 {
     LatencyAboveMaximum,
     /// Assurance set is absent or invalid.
     AssuranceEvidenceInvalid,
+    /// Typed reliability artifact is absent, stale, untrusted, tampered, or inconsistent.
+    ReliabilityEvidenceInvalid,
     /// Assurance semantics fail the buyer policy.
     AssurancePolicyRejected,
     /// Maximum quote exceeds buyer authorization.
@@ -252,6 +279,9 @@ pub enum RoutingError {
     /// A verified provider key signed distinct offer digests at one logical sequence.
     #[error("verified capacity-offer signing sequence equivocation")]
     VerifiedOfferSigningSequenceEquivocation,
+    /// A verified reliability key signed distinct artifact digests at one logical sequence.
+    #[error("verified reliability-artifact signing sequence equivocation")]
+    VerifiedReliabilitySigningSequenceEquivocation,
     /// Required provider is absent.
     #[error("selected provider is absent")]
     ProviderUnknown,
@@ -273,7 +303,7 @@ pub enum RoutingError {
 /// Returns on duplicate identity, canonicalization, arithmetic, or no eligible
 /// offer. Ineligible offers remain visible in the decision candidate set.
 pub fn select_route_v1(context: &RoutingContextV1<'_>) -> Result<RouteDecisionV1, RoutingError> {
-    select_route_internal(context, None)
+    select_route_internal(context, None, None)
 }
 
 /// Select among offers only after provider-key authentication of each exact offer digest.
@@ -311,12 +341,55 @@ pub fn select_signed_route_v1(
         assurance_blobs: context.assurance_blobs,
         verification_keys: context.verification_keys,
     };
-    select_route_internal(&unsigned_context, Some(&signed_by_digest))
+    select_route_internal(&unsigned_context, Some(&signed_by_digest), None)
+}
+
+/// Select among provider-authenticated offers whose typed reliability artifact also verifies.
+///
+/// Missing, stale, untrusted, tampered, cross-provider, cross-service, or arithmetically
+/// inconsistent reliability artifacts become non-compensable candidate failures. They cannot be
+/// offset by lower price, lower latency, higher declared capacity, or a valid offer signature.
+///
+/// # Errors
+///
+/// Returns on duplicate offer identity, verified signing-sequence equivocation,
+/// canonicalization, arithmetic, or when no fully eligible offer remains.
+pub fn select_reliability_artifact_verified_route_v1(
+    context: &ReliabilityArtifactVerifiedRoutingContextV1<'_>,
+) -> Result<RouteDecisionV1, RoutingError> {
+    let mut offers = Vec::with_capacity(context.offers.len());
+    let mut signed_by_digest = BTreeMap::new();
+    for signed_offer in context.offers {
+        let offer_digest = signed_offer.offer.digest()?;
+        if signed_by_digest
+            .insert(offer_digest, signed_offer)
+            .is_some()
+        {
+            return Err(RoutingError::DuplicateOffer);
+        }
+        offers.push(signed_offer.offer.clone());
+    }
+    let unsigned_context = RoutingContextV1 {
+        evaluated_at: context.evaluated_at,
+        service: context.service,
+        providers: context.providers,
+        offers: &offers,
+        policy: context.policy,
+        assurance_sets: context.assurance_sets,
+        assurance_blobs: context.assurance_blobs,
+        verification_keys: context.verification_keys,
+    };
+    select_route_internal(
+        &unsigned_context,
+        Some(&signed_by_digest),
+        Some(context.reliability_artifacts),
+    )
 }
 
 fn select_route_internal(
     context: &RoutingContextV1<'_>,
     signed_offers: Option<&BTreeMap<Sha256Digest, &SignedCapacityOfferV1>>,
+    reliability_artifacts: Option<&BTreeMap<Sha256Digest, SignedReliabilityArtifactV1>>,
 ) -> Result<RouteDecisionV1, RoutingError> {
     let service_digest = context.service.digest()?;
     let policy_digest = context.policy.digest()?;
@@ -333,11 +406,15 @@ fn select_route_internal(
             service_digest,
             policy_digest,
             signed_offers,
+            reliability_artifacts,
         )?);
     }
     reports.sort_by_key(|report| report.offer_digest);
     if let Some(signed_offers) = signed_offers {
         reject_verified_signing_sequence_equivocation(&reports, signed_offers)?;
+    }
+    if let Some(reliability_artifacts) = reliability_artifacts {
+        reject_verified_reliability_sequence_equivocation(context, reliability_artifacts)?;
     }
 
     let chosen = reports
@@ -399,7 +476,11 @@ fn select_route_internal(
         selected_offer_digest: chosen.0.offer_digest,
         selected_provider_identity_digest: selected_provider.digest()?,
         selected_cost: chosen.1,
-        routing_algorithm: "expected-successful-cost-v1".to_owned(),
+        routing_algorithm: if reliability_artifacts.is_some() {
+            "expected-successful-cost-reliability-artifact-v1".to_owned()
+        } else {
+            "expected-successful-cost-v1".to_owned()
+        },
         evaluated_at: context.evaluated_at.clone(),
         authority_granted: false,
         route_digest: Sha256Digest::from_bytes([0; 32]),
@@ -414,6 +495,7 @@ fn evaluate_offer(
     service_digest: Sha256Digest,
     policy_digest: Sha256Digest,
     signed_offers: Option<&BTreeMap<Sha256Digest, &SignedCapacityOfferV1>>,
+    reliability_artifacts: Option<&BTreeMap<Sha256Digest, SignedReliabilityArtifactV1>>,
 ) -> Result<EligibilityReportV1, RoutingError> {
     let offer_digest = offer.digest()?;
     let mut failures = BTreeSet::new();
@@ -425,6 +507,17 @@ fn evaluate_offer(
         offer_digest,
         &mut failures,
     );
+    if let Some(reliability_artifacts) = reliability_artifacts
+        && verify_offer_reliability_v1(
+            reliability_artifacts,
+            offer,
+            context.evaluated_at,
+            context.verification_keys,
+        )
+        .is_err()
+    {
+        failures.insert(EligibilityFailureV1::ReliabilityEvidenceInvalid);
+    }
 
     let provider = context.providers.get(&offer.provider_id);
     let provider_identity_digest = provider.and_then(|value| value.digest().ok());
@@ -645,6 +738,35 @@ fn reject_verified_signing_sequence_equivocation(
         );
         if !verified_sequences.insert(sequence_identity) {
             return Err(RoutingError::VerifiedOfferSigningSequenceEquivocation);
+        }
+    }
+    Ok(())
+}
+
+fn reject_verified_reliability_sequence_equivocation(
+    context: &RoutingContextV1<'_>,
+    reliability_artifacts: &BTreeMap<Sha256Digest, SignedReliabilityArtifactV1>,
+) -> Result<(), RoutingError> {
+    let mut verified_sequences = BTreeMap::new();
+    for offer in context.offers {
+        let Ok(artifact) = verify_offer_reliability_v1(
+            reliability_artifacts,
+            offer,
+            context.evaluated_at,
+            context.verification_keys,
+        ) else {
+            continue;
+        };
+        let sequence_identity = (
+            artifact.statement.signer_id.clone(),
+            artifact.statement.key_id.clone(),
+            artifact.statement.sequence,
+        );
+        if verified_sequences
+            .insert(sequence_identity, artifact.artifact.artifact_digest)
+            .is_some_and(|existing| existing != artifact.artifact.artifact_digest)
+        {
+            return Err(RoutingError::VerifiedReliabilitySigningSequenceEquivocation);
         }
     }
     Ok(())

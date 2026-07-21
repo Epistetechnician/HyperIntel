@@ -6,8 +6,8 @@ use data_encoding::HEXLOWER;
 use ed25519_dalek::{Signer as _, SigningKey};
 use hyperintel_assurance::{
     AssuranceClaimV1, AssuranceEnvelopeV1, AssuranceEvidenceSetV1, AssuranceRootClassV1,
-    AssuranceRootV1, EvidenceClassification, RegisteredVerificationKeyV1, SignedStatementV1,
-    ValidityWindowV1, VerificationKeyRegistry, build_assurance_evidence_set_v1,
+    AssuranceRootV1, EvidenceClassification, RegisteredVerificationKeyV1, SignatureError,
+    SignedStatementV1, ValidityWindowV1, VerificationKeyRegistry, build_assurance_evidence_set_v1,
     evidence_blob_ref_v1,
 };
 use hyperintel_core::{
@@ -17,12 +17,18 @@ use hyperintel_core::{
     UtcTimestamp,
 };
 use hyperintel_market::{
-    ExecutionStatusV1, MarketEvidenceBundleV1, MeteringReceiptDraftV1, RouteDecisionV1,
+    ExecutionStatusV1, MarketEvidenceBundleV1, MeteringReceiptDraftV1, ReliabilityArtifactDraftV1,
+    ReliabilityArtifactError, ReliabilityArtifactVerifiedMarketEvidenceBundleV3,
+    ReliabilityArtifactVerifiedRoutingContextV1, ReliabilityVerifierStatementV1, RouteDecisionV1,
     RoutingContextV1, RoutingError, SignedCapacityOfferV1, SignedMarketEvidenceBundleV2,
-    SignedRoutingContextV1, build_market_evidence_bundle_v1, build_metering_receipt_v1,
-    build_signed_market_evidence_bundle_v2, derive_settlement_intent_v1, select_route_v1,
+    SignedReliabilityArtifactV1, SignedRoutingContextV1, build_market_evidence_bundle_v1,
+    build_metering_receipt_v1, build_reliability_artifact_v1,
+    build_reliability_artifact_verified_market_evidence_bundle_v3,
+    build_signed_market_evidence_bundle_v2, derive_observed_success_probability_v1,
+    derive_settlement_intent_v1, select_reliability_artifact_verified_route_v1, select_route_v1,
     select_signed_route_v1, verify_market_evidence_bundle_v1,
-    verify_signed_market_evidence_bundle_v2,
+    verify_reliability_artifact_verified_market_evidence_bundle_v3,
+    verify_signed_market_evidence_bundle_v2, verify_signed_reliability_artifact_v1,
 };
 
 struct Fixture {
@@ -36,6 +42,11 @@ struct Fixture {
     assurance_blobs: BTreeMap<Sha256Digest, Vec<u8>>,
     registry: VerificationKeyRegistry,
     verification_keys: Vec<RegisteredVerificationKeyV1>,
+}
+
+struct ReliabilityFixture {
+    fixture: Fixture,
+    reliability_artifacts: BTreeMap<Sha256Digest, SignedReliabilityArtifactV1>,
 }
 
 #[test]
@@ -172,6 +183,535 @@ fn contract_signed_offer_v2_reconstructs_and_has_a_stable_golden_digest()
         signed_route(&fixture)?,
         signed_route_with(&fixture, &reversed, &fixture.registry)?
     );
+    Ok(())
+}
+
+#[test]
+fn contract_reliability_v3_reconstructs_and_has_stable_golden_digests()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = reliability_fixture()?;
+    let bundle = reliability_bundle(&fixture)?;
+    verify_reliability_artifact_verified_market_evidence_bundle_v3(
+        &bundle,
+        &fixture.fixture.assurance_blobs,
+        &fixture.reliability_artifacts,
+        &fixture.fixture.registry,
+    )?;
+    assert_eq!(
+        bundle.route.routing_algorithm,
+        "expected-successful-cost-reliability-artifact-v1"
+    );
+    assert_eq!(bundle.route.selected_provider_id.as_str(), "provider:beta");
+    assert!(
+        !bundle
+            .explicit_nonclaims
+            .iter()
+            .any(|claim| claim == "no-reliability-evidence-verification")
+    );
+    assert!(bundle.explicit_nonclaims.iter().any(|claim| {
+        claim == "no-observation-source-verification-or-future-reliability-accuracy"
+    }));
+    assert_eq!(
+        fixture
+            .reliability_artifacts
+            .values()
+            .find(|artifact| artifact.artifact.provider_id.as_str() == "provider:beta")
+            .ok_or("beta reliability artifact missing")?
+            .artifact
+            .artifact_digest
+            .to_hex(),
+        "285feddb9407af039f26eac03d2eb6246a1b54dcf4eacc6f52fc06e6dbbc92f4"
+    );
+    assert_eq!(
+        bundle.bundle_digest.to_hex(),
+        "59db4b80a9fec85a2fa8e72d7e6cb36d446918c8a85a896883be7d83d50c8fbf"
+    );
+
+    let encoded = serde_json::to_vec(&bundle)?;
+    let decoded: ReliabilityArtifactVerifiedMarketEvidenceBundleV3 =
+        serde_json::from_slice(&encoded)?;
+    assert_eq!(decoded, bundle);
+
+    let mut reversed_offers = fixture.fixture.signed_offers.clone();
+    reversed_offers.reverse();
+    assert_eq!(
+        reliability_route_with(
+            &fixture.fixture,
+            &reversed_offers,
+            &fixture.reliability_artifacts,
+        )?,
+        reliability_route(&fixture)?,
+    );
+    Ok(())
+}
+
+#[test]
+fn contract_invalid_reliability_artifact_cannot_win_or_poison_fallback()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = reliability_fixture()?;
+    let beta_digest = fixture
+        .fixture
+        .offers
+        .iter()
+        .find(|offer| offer.provider_id.as_str() == "provider:beta")
+        .map(|offer| offer.reliability_evidence_digest)
+        .ok_or("beta offer missing")?;
+
+    let mut missing = fixture.reliability_artifacts.clone();
+    missing.remove(&beta_digest);
+    let fallback =
+        reliability_route_with(&fixture.fixture, &fixture.fixture.signed_offers, &missing)?;
+    assert_eq!(fallback.selected_provider_id.as_str(), "provider:alpha");
+    assert!(
+        fallback
+            .candidates
+            .iter()
+            .find(|candidate| candidate.provider_id.as_str() == "provider:beta")
+            .is_some_and(|candidate| !candidate.eligible)
+    );
+
+    let mut tamper_cases = Vec::new();
+    let mut count_tamper = fixture.reliability_artifacts.clone();
+    count_tamper
+        .get_mut(&beta_digest)
+        .ok_or("beta artifact missing")?
+        .artifact
+        .successful_observations = 98;
+    tamper_cases.push(count_tamper);
+
+    let mut source_tamper = fixture.reliability_artifacts.clone();
+    source_tamper
+        .get_mut(&beta_digest)
+        .ok_or("beta artifact missing")?
+        .artifact
+        .source_observation_digest = Sha256Digest::from_bytes([0; 32]);
+    tamper_cases.push(source_tamper);
+
+    let mut signature_tamper = fixture.reliability_artifacts.clone();
+    let signature = &mut signature_tamper
+        .get_mut(&beta_digest)
+        .ok_or("beta artifact missing")?
+        .statement
+        .signature_hex;
+    let replacement = if signature.starts_with("00") {
+        "01"
+    } else {
+        "00"
+    };
+    signature.replace_range(0..2, replacement);
+    tamper_cases.push(signature_tamper);
+
+    let mut stale = fixture.reliability_artifacts.clone();
+    stale
+        .get_mut(&beta_digest)
+        .ok_or("beta artifact missing")?
+        .artifact
+        .valid_until = timestamp("2026-07-20T11:59:59Z")?;
+    tamper_cases.push(stale);
+
+    for artifacts in tamper_cases {
+        let route =
+            reliability_route_with(&fixture.fixture, &fixture.fixture.signed_offers, &artifacts)?;
+        assert_eq!(route.selected_provider_id.as_str(), "provider:alpha");
+    }
+
+    let mut invalid_signed_offers = fixture.fixture.signed_offers.clone();
+    let beta_signed = invalid_signed_offers
+        .iter_mut()
+        .find(|offer| offer.offer.provider_id.as_str() == "provider:beta")
+        .ok_or("beta signed offer missing")?;
+    let replacement = if beta_signed.statement.signature_hex.starts_with("00") {
+        "01"
+    } else {
+        "00"
+    };
+    beta_signed
+        .statement
+        .signature_hex
+        .replace_range(0..2, replacement);
+    let invalid_offer_fallback = reliability_route_with(
+        &fixture.fixture,
+        &invalid_signed_offers,
+        &fixture.reliability_artifacts,
+    )?;
+    assert_eq!(
+        invalid_offer_fallback.selected_provider_id.as_str(),
+        "provider:alpha"
+    );
+
+    assert!(matches!(
+        select_reliability_artifact_verified_route_v1(
+            &ReliabilityArtifactVerifiedRoutingContextV1 {
+                evaluated_at: &fixture.fixture.evaluated_at,
+                service: &fixture.fixture.service,
+                providers: &fixture.fixture.providers,
+                offers: &fixture.fixture.signed_offers,
+                policy: &fixture.fixture.policy,
+                assurance_sets: &fixture.fixture.assurance_sets,
+                assurance_blobs: &fixture.fixture.assurance_blobs,
+                reliability_artifacts: &BTreeMap::new(),
+                verification_keys: &fixture.fixture.registry,
+            },
+        ),
+        Err(RoutingError::NoEligibleOffer)
+    ));
+    Ok(())
+}
+
+#[test]
+fn contract_reliability_probability_uses_exact_floor_arithmetic()
+-> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(derive_observed_success_probability_v1(1, 3)?.get(), 333_333);
+    assert_eq!(derive_observed_success_probability_v1(2, 3)?.get(), 666_666);
+    assert_eq!(
+        derive_observed_success_probability_v1(u64::MAX, u64::MAX)?.get(),
+        1_000_000
+    );
+    assert_eq!(
+        derive_observed_success_probability_v1(u64::MAX - 1, u64::MAX)?.get(),
+        999_999
+    );
+    assert!(derive_observed_success_probability_v1(0, 0).is_err());
+    assert!(derive_observed_success_probability_v1(2, 1).is_err());
+    Ok(())
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn contract_reliability_artifact_rejects_validly_resigned_semantic_mismatches()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = reliability_fixture()?;
+    let beta_offer = fixture
+        .fixture
+        .offers
+        .iter()
+        .find(|offer| offer.provider_id.as_str() == "provider:beta")
+        .ok_or("beta offer missing")?
+        .clone();
+    let beta_artifact = fixture
+        .reliability_artifacts
+        .get(&beta_offer.reliability_evidence_digest)
+        .ok_or("beta reliability artifact missing")?
+        .clone();
+    let signing_key = SigningKey::from_bytes(&[70; 32]);
+
+    let mut wrong_provider_offer = beta_offer.clone();
+    let mut wrong_provider = beta_artifact.clone();
+    wrong_provider.artifact.provider_id = "provider:alpha".parse()?;
+    refresh_reliability_artifact_signature(
+        &mut wrong_provider,
+        &mut wrong_provider_offer,
+        &signing_key,
+    )?;
+    assert!(matches!(
+        verify_signed_reliability_artifact_v1(
+            &wrong_provider,
+            wrong_provider.artifact.artifact_digest,
+            &wrong_provider_offer,
+            &fixture.fixture.evaluated_at,
+            &fixture.fixture.registry,
+        ),
+        Err(ReliabilityArtifactError::ProviderBindingMismatch)
+    ));
+
+    let mut wrong_service_offer = beta_offer.clone();
+    let mut wrong_service = beta_artifact.clone();
+    wrong_service.artifact.service_spec_digest = Sha256Digest::from_bytes([98; 32]);
+    refresh_reliability_artifact_signature(
+        &mut wrong_service,
+        &mut wrong_service_offer,
+        &signing_key,
+    )?;
+    assert!(matches!(
+        verify_signed_reliability_artifact_v1(
+            &wrong_service,
+            wrong_service.artifact.artifact_digest,
+            &wrong_service_offer,
+            &fixture.fixture.evaluated_at,
+            &fixture.fixture.registry,
+        ),
+        Err(ReliabilityArtifactError::ServiceBindingMismatch)
+    ));
+
+    let mut wrong_probability_offer = beta_offer.clone();
+    wrong_probability_offer.success_probability = PartsPerMillion::new(980_000)?;
+    assert!(matches!(
+        verify_signed_reliability_artifact_v1(
+            &beta_artifact,
+            beta_artifact.artifact.artifact_digest,
+            &wrong_probability_offer,
+            &fixture.fixture.evaluated_at,
+            &fixture.fixture.registry,
+        ),
+        Err(ReliabilityArtifactError::ProbabilityMismatch)
+    ));
+
+    let mut invalid_window_offer = beta_offer.clone();
+    let mut invalid_window = beta_artifact.clone();
+    invalid_window.artifact.observation_window_start =
+        invalid_window.artifact.observation_window_end.clone();
+    refresh_reliability_artifact_signature(
+        &mut invalid_window,
+        &mut invalid_window_offer,
+        &signing_key,
+    )?;
+    assert!(matches!(
+        verify_signed_reliability_artifact_v1(
+            &invalid_window,
+            invalid_window.artifact.artifact_digest,
+            &invalid_window_offer,
+            &fixture.fixture.evaluated_at,
+            &fixture.fixture.registry,
+        ),
+        Err(ReliabilityArtifactError::InvalidObservationWindow)
+    ));
+
+    let mut uncontained_offer = beta_offer.clone();
+    let mut uncontained = beta_artifact.clone();
+    uncontained.artifact.valid_from = timestamp("2026-07-20T11:00:00Z")?;
+    refresh_reliability_artifact_signature(&mut uncontained, &mut uncontained_offer, &signing_key)?;
+    assert!(matches!(
+        verify_signed_reliability_artifact_v1(
+            &uncontained,
+            uncontained.artifact.artifact_digest,
+            &uncontained_offer,
+            &fixture.fixture.evaluated_at,
+            &fixture.fixture.registry,
+        ),
+        Err(ReliabilityArtifactError::OfferValidityNotContained)
+    ));
+
+    let mut wrong_statement = beta_artifact.clone();
+    wrong_statement.statement.observation_policy_digest = Sha256Digest::from_bytes([97; 32]);
+    resign_reliability_statement(&mut wrong_statement, &signing_key)?;
+    assert!(matches!(
+        verify_signed_reliability_artifact_v1(
+            &wrong_statement,
+            wrong_statement.artifact.artifact_digest,
+            &beta_offer,
+            &fixture.fixture.evaluated_at,
+            &fixture.fixture.registry,
+        ),
+        Err(ReliabilityArtifactError::StatementBindingMismatch)
+    ));
+
+    let mut wrong_statement_schema = beta_artifact.clone();
+    wrong_statement_schema.statement.schema_version =
+        "hyperintel.reliability-verifier-statement.v2".to_owned();
+    resign_reliability_statement(&mut wrong_statement_schema, &signing_key)?;
+    assert!(matches!(
+        verify_signed_reliability_artifact_v1(
+            &wrong_statement_schema,
+            wrong_statement_schema.artifact.artifact_digest,
+            &beta_offer,
+            &fixture.fixture.evaluated_at,
+            &fixture.fixture.registry,
+        ),
+        Err(ReliabilityArtifactError::StatementBindingMismatch)
+    ));
+
+    let mut wrong_statement_validity = beta_artifact.clone();
+    wrong_statement_validity.statement.issued_at = timestamp("2026-07-20T01:00:00Z")?;
+    resign_reliability_statement(&mut wrong_statement_validity, &signing_key)?;
+    assert!(matches!(
+        verify_signed_reliability_artifact_v1(
+            &wrong_statement_validity,
+            wrong_statement_validity.artifact.artifact_digest,
+            &beta_offer,
+            &fixture.fixture.evaluated_at,
+            &fixture.fixture.registry,
+        ),
+        Err(ReliabilityArtifactError::StatementValidityMismatch)
+    ));
+
+    let mut zero_sequence = beta_artifact.clone();
+    zero_sequence.statement.sequence = 0;
+    resign_reliability_statement(&mut zero_sequence, &signing_key)?;
+    assert!(matches!(
+        verify_signed_reliability_artifact_v1(
+            &zero_sequence,
+            zero_sequence.artifact.artifact_digest,
+            &beta_offer,
+            &fixture.fixture.evaluated_at,
+            &fixture.fixture.registry,
+        ),
+        Err(ReliabilityArtifactError::InvalidSequence)
+    ));
+
+    let mut wrong_class_registry = VerificationKeyRegistry::default();
+    wrong_class_registry.register(reliability_key(AssuranceRootClassV1::ProviderKey, None)?)?;
+    assert!(matches!(
+        verify_signed_reliability_artifact_v1(
+            &beta_artifact,
+            beta_artifact.artifact.artifact_digest,
+            &beta_offer,
+            &fixture.fixture.evaluated_at,
+            &wrong_class_registry,
+        ),
+        Err(ReliabilityArtifactError::TrustRootMismatch)
+    ));
+
+    let mut revoked_registry = VerificationKeyRegistry::default();
+    revoked_registry.register(reliability_key(
+        AssuranceRootClassV1::VerifierKey,
+        Some(fixture.fixture.evaluated_at.clone()),
+    )?)?;
+    assert!(matches!(
+        verify_signed_reliability_artifact_v1(
+            &beta_artifact,
+            beta_artifact.artifact.artifact_digest,
+            &beta_offer,
+            &fixture.fixture.evaluated_at,
+            &revoked_registry,
+        ),
+        Err(ReliabilityArtifactError::Signature(SignatureError::Revoked))
+    ));
+    Ok(())
+}
+
+#[test]
+fn contract_reliability_sequence_equivocation_blocks_distinct_artifacts_but_allows_reuse()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = reliability_fixture()?;
+    let signing_key = SigningKey::from_bytes(&[70; 32]);
+    let mut equivocated = fixture.reliability_artifacts.clone();
+    let beta_digest = fixture
+        .fixture
+        .offers
+        .iter()
+        .find(|offer| offer.provider_id.as_str() == "provider:beta")
+        .map(|offer| offer.reliability_evidence_digest)
+        .ok_or("beta offer missing")?;
+    let beta_artifact = equivocated
+        .get_mut(&beta_digest)
+        .ok_or("beta artifact missing")?;
+    beta_artifact.statement.sequence = 1;
+    resign_reliability_statement(beta_artifact, &signing_key)?;
+    assert!(matches!(
+        reliability_route_with(
+            &fixture.fixture,
+            &fixture.fixture.signed_offers,
+            &equivocated,
+        ),
+        Err(RoutingError::VerifiedReliabilitySigningSequenceEquivocation)
+    ));
+
+    let alpha = fixture
+        .fixture
+        .signed_offers
+        .iter()
+        .find(|offer| offer.offer.provider_id.as_str() == "provider:alpha")
+        .ok_or("alpha signed offer missing")?;
+    let mut reused_offer = alpha.offer.clone();
+    reused_offer.offer_id = "offer:alpha-reuses-reliability".parse()?;
+    reused_offer.fixed_request_fee = AtomicAmount(999);
+    let reused = signed_capacity_offer(
+        reused_offer,
+        50,
+        alpha.statement.assurance_envelope_digest,
+        99,
+    )?;
+    let mut offers = fixture.fixture.signed_offers.clone();
+    offers.push(reused);
+    assert!(
+        reliability_route_with(&fixture.fixture, &offers, &fixture.reliability_artifacts).is_ok()
+    );
+    Ok(())
+}
+
+#[test]
+fn contract_v3_bundle_rejects_reliability_and_nonclaim_tamper()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = reliability_fixture()?;
+    let bundle = reliability_bundle(&fixture)?;
+    let beta_digest = fixture
+        .fixture
+        .offers
+        .iter()
+        .find(|offer| offer.provider_id.as_str() == "provider:beta")
+        .map(|offer| offer.reliability_evidence_digest)
+        .ok_or("beta offer missing")?;
+
+    let mut missing = fixture.reliability_artifacts.clone();
+    missing.remove(&beta_digest);
+    assert!(
+        verify_reliability_artifact_verified_market_evidence_bundle_v3(
+            &bundle,
+            &fixture.fixture.assurance_blobs,
+            &missing,
+            &fixture.fixture.registry,
+        )
+        .is_err()
+    );
+
+    let mut tampered = fixture.reliability_artifacts.clone();
+    tampered
+        .get_mut(&beta_digest)
+        .ok_or("beta artifact missing")?
+        .artifact
+        .total_observations = 101;
+    assert!(
+        verify_reliability_artifact_verified_market_evidence_bundle_v3(
+            &bundle,
+            &fixture.fixture.assurance_blobs,
+            &tampered,
+            &fixture.fixture.registry,
+        )
+        .is_err()
+    );
+
+    let mut missing_nonclaim = bundle;
+    missing_nonclaim.explicit_nonclaims.retain(|claim| {
+        claim != "no-observation-source-verification-or-future-reliability-accuracy"
+    });
+    assert!(
+        verify_reliability_artifact_verified_market_evidence_bundle_v3(
+            &missing_nonclaim,
+            &fixture.fixture.assurance_blobs,
+            &fixture.reliability_artifacts,
+            &fixture.fixture.registry,
+        )
+        .is_err()
+    );
+    Ok(())
+}
+
+#[test]
+fn contract_rejected_reliability_key_claim_does_not_become_trusted()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = reliability_fixture()?;
+    let mut artifacts = fixture.reliability_artifacts.clone();
+    let beta_digest = fixture
+        .fixture
+        .offers
+        .iter()
+        .find(|offer| offer.provider_id.as_str() == "provider:beta")
+        .map(|offer| offer.reliability_evidence_digest)
+        .ok_or("beta offer missing")?;
+    artifacts
+        .get_mut(&beta_digest)
+        .ok_or("beta artifact missing")?
+        .statement
+        .key_id = "key:attacker-claimed".parse()?;
+
+    let bundle = reliability_bundle_with(
+        &fixture.fixture,
+        &artifacts,
+        &fixture.fixture.verification_keys,
+    )?;
+    assert_eq!(bundle.route.selected_provider_id.as_str(), "provider:alpha");
+    assert!(
+        !bundle
+            .verification_keys
+            .iter()
+            .any(|key| key.key_id.as_str() == "key:attacker-claimed")
+    );
+    verify_reliability_artifact_verified_market_evidence_bundle_v3(
+        &bundle,
+        &fixture.fixture.assurance_blobs,
+        &artifacts,
+        &fixture.fixture.registry,
+    )?;
     Ok(())
 }
 
@@ -618,6 +1158,105 @@ fn signed_bundle_with(
     )?)
 }
 
+fn reliability_route(
+    fixture: &ReliabilityFixture,
+) -> Result<RouteDecisionV1, Box<dyn std::error::Error>> {
+    Ok(reliability_route_with(
+        &fixture.fixture,
+        &fixture.fixture.signed_offers,
+        &fixture.reliability_artifacts,
+    )?)
+}
+
+fn reliability_route_with(
+    fixture: &Fixture,
+    offers: &[SignedCapacityOfferV1],
+    reliability_artifacts: &BTreeMap<Sha256Digest, SignedReliabilityArtifactV1>,
+) -> Result<RouteDecisionV1, RoutingError> {
+    select_reliability_artifact_verified_route_v1(&ReliabilityArtifactVerifiedRoutingContextV1 {
+        evaluated_at: &fixture.evaluated_at,
+        service: &fixture.service,
+        providers: &fixture.providers,
+        offers,
+        policy: &fixture.policy,
+        assurance_sets: &fixture.assurance_sets,
+        assurance_blobs: &fixture.assurance_blobs,
+        reliability_artifacts,
+        verification_keys: &fixture.registry,
+    })
+}
+
+fn reliability_bundle(
+    fixture: &ReliabilityFixture,
+) -> Result<ReliabilityArtifactVerifiedMarketEvidenceBundleV3, Box<dyn std::error::Error>> {
+    reliability_bundle_with(
+        &fixture.fixture,
+        &fixture.reliability_artifacts,
+        &fixture.fixture.verification_keys,
+    )
+}
+
+fn reliability_bundle_with(
+    fixture: &Fixture,
+    reliability_artifacts: &BTreeMap<Sha256Digest, SignedReliabilityArtifactV1>,
+    verification_keys: &[RegisteredVerificationKeyV1],
+) -> Result<ReliabilityArtifactVerifiedMarketEvidenceBundleV3, Box<dyn std::error::Error>> {
+    let route = reliability_route_with(fixture, &fixture.signed_offers, reliability_artifacts)?;
+    let provider = fixture
+        .providers
+        .get(&route.selected_provider_id)
+        .ok_or("selected provider missing")?;
+    let offer = fixture
+        .offers
+        .iter()
+        .find(|offer| offer.digest().ok() == Some(route.selected_offer_digest))
+        .ok_or("selected offer missing")?;
+    let metering = build_metering_receipt_v1(
+        &fixture.service,
+        provider,
+        offer,
+        &fixture.policy,
+        &route,
+        MeteringReceiptDraftV1 {
+            started_at: timestamp("2026-07-20T12:00:01Z")?,
+            first_token_at: timestamp("2026-07-20T12:00:02Z")?,
+            completed_at: timestamp("2026-07-20T12:00:04Z")?,
+            input_tokens: 900,
+            output_tokens: 400,
+            execution_status: ExecutionStatusV1::Completed,
+            prompt_digest: fixture.policy.prompt_digest,
+            output_digest: Sha256Digest::from_bytes([31; 32]),
+            provider_metering_evidence_digest: Sha256Digest::from_bytes([32; 32]),
+            buyer_observation_digest: Some(Sha256Digest::from_bytes([33; 32])),
+        },
+    )?;
+    let settlement = derive_settlement_intent_v1(
+        &fixture.service,
+        provider,
+        offer,
+        &fixture.policy,
+        &route,
+        &metering,
+        timestamp("2026-07-20T13:00:00Z")?,
+    )?;
+    Ok(build_reliability_artifact_verified_market_evidence_bundle_v3(
+        fixture.evaluated_at.clone(),
+        fixture.service.clone(),
+        fixture.providers.clone(),
+        fixture.signed_offers.clone(),
+        fixture.policy.clone(),
+        fixture.assurance_sets.clone(),
+        verification_keys.to_vec(),
+        route,
+        metering,
+        settlement,
+        vec![
+            "capacity-offer authenticity is checked only against caller-supplied keys".to_owned(),
+            "reliability counts and source commitments are accepted only as verifier-signed supplied evidence".to_owned(),
+        ],
+    )?)
+}
+
 fn assert_authorization_windows(
     fixture: &Fixture,
     provider: &ProviderIdentityV1,
@@ -871,6 +1510,82 @@ fn fixture() -> Result<Fixture, Box<dyn std::error::Error>> {
     })
 }
 
+fn reliability_fixture() -> Result<ReliabilityFixture, Box<dyn std::error::Error>> {
+    let mut fixture = fixture()?;
+    let verifier_signing_key = SigningKey::from_bytes(&[70; 32]);
+    let reliability_key = reliability_key(AssuranceRootClassV1::VerifierKey, None)?;
+    fixture.registry.register(reliability_key.clone())?;
+    fixture.verification_keys.push(reliability_key);
+
+    let offer_signing_material = fixture
+        .signed_offers
+        .iter()
+        .map(|signed_offer| {
+            (
+                signed_offer.offer.provider_id.clone(),
+                (
+                    signed_offer.statement.assurance_envelope_digest,
+                    signed_offer.statement.sequence,
+                ),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let mut reliability_artifacts = BTreeMap::new();
+    for (index, offer) in fixture.offers.iter_mut().enumerate() {
+        let (successful_observations, total_observations) =
+            if offer.provider_id.as_str() == "provider:alpha" {
+                (8, 10)
+            } else {
+                (99, 100)
+            };
+        let artifact = build_reliability_artifact_v1(ReliabilityArtifactDraftV1 {
+            provider_id: offer.provider_id.clone(),
+            service_spec_digest: offer.service_spec_digest,
+            observation_policy_digest: Sha256Digest::from_bytes([40; 32]),
+            source_observation_digest: Sha256Digest::from_bytes(
+                [41_u8
+                    .checked_add(u8::try_from(index)?)
+                    .ok_or("reliability source digest byte overflow")?; 32],
+            ),
+            observation_window_start: timestamp("2026-07-18T00:00:00Z")?,
+            observation_window_end: timestamp("2026-07-19T23:59:59Z")?,
+            valid_from: offer.valid_from.clone(),
+            valid_until: offer.valid_until.clone(),
+            successful_observations,
+            total_observations,
+        })?;
+        offer.reliability_evidence_digest = artifact.artifact_digest;
+        let signed_artifact = signed_reliability_artifact(
+            artifact,
+            &verifier_signing_key,
+            u64::try_from(index)?
+                .checked_add(1)
+                .ok_or("reliability sequence overflow")?,
+        )?;
+        reliability_artifacts.insert(signed_artifact.artifact.artifact_digest, signed_artifact);
+    }
+    fixture.signed_offers = fixture
+        .offers
+        .iter()
+        .map(|offer| {
+            let (assurance_envelope_digest, sequence) = offer_signing_material
+                .get(&offer.provider_id)
+                .copied()
+                .ok_or("provider offer signing material missing")?;
+            let key_byte = if offer.provider_id.as_str() == "provider:alpha" {
+                50
+            } else {
+                51
+            };
+            signed_capacity_offer(offer.clone(), key_byte, assurance_envelope_digest, sequence)
+        })
+        .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
+    Ok(ReliabilityFixture {
+        fixture,
+        reliability_artifacts,
+    })
+}
+
 type BuiltEvidence = (
     AssuranceEvidenceSetV1,
     (Sha256Digest, Vec<u8>),
@@ -984,6 +1699,75 @@ fn signed_capacity_offer(
         offer,
         statement,
     })
+}
+
+fn signed_reliability_artifact(
+    artifact: hyperintel_market::ReliabilityArtifactV1,
+    signing_key: &SigningKey,
+    sequence: u64,
+) -> Result<SignedReliabilityArtifactV1, Box<dyn std::error::Error>> {
+    let mut statement = ReliabilityVerifierStatementV1 {
+        schema_version: "hyperintel.reliability-verifier-statement.v1".to_owned(),
+        artifact_digest: artifact.artifact_digest,
+        observation_policy_digest: artifact.observation_policy_digest,
+        issued_at: artifact.valid_from.clone(),
+        expires_at: artifact.valid_until.clone(),
+        sequence,
+        signer_id: "verifier:reliability".parse()?,
+        key_id: "key:reliability-1".parse()?,
+        algorithm: "ed25519".to_owned(),
+        signature_hex: String::new(),
+    };
+    statement.signature_hex =
+        HEXLOWER.encode(&signing_key.sign(&statement.signing_message()?).to_bytes());
+    Ok(SignedReliabilityArtifactV1 {
+        schema_version: "hyperintel.signed-reliability-artifact.v1".to_owned(),
+        artifact,
+        statement,
+    })
+}
+
+fn reliability_key(
+    trust_root_class: AssuranceRootClassV1,
+    revoked_at: Option<UtcTimestamp>,
+) -> Result<RegisteredVerificationKeyV1, Box<dyn std::error::Error>> {
+    let signing_key = SigningKey::from_bytes(&[70; 32]);
+    Ok(RegisteredVerificationKeyV1 {
+        signer_id: "verifier:reliability".parse()?,
+        key_id: "key:reliability-1".parse()?,
+        trust_root_class,
+        public_key_hex: HEXLOWER.encode(signing_key.verifying_key().as_bytes()),
+        valid_from: timestamp("2026-07-19T00:00:00Z")?,
+        valid_until: timestamp("2026-07-22T00:00:00Z")?,
+        revoked_at,
+    })
+}
+
+fn refresh_reliability_artifact_signature(
+    signed: &mut SignedReliabilityArtifactV1,
+    offer: &mut CapacityOfferV1,
+    signing_key: &SigningKey,
+) -> Result<(), Box<dyn std::error::Error>> {
+    signed.artifact.artifact_digest = signed.artifact.digest()?;
+    offer.reliability_evidence_digest = signed.artifact.artifact_digest;
+    signed.statement.artifact_digest = signed.artifact.artifact_digest;
+    signed.statement.observation_policy_digest = signed.artifact.observation_policy_digest;
+    signed.statement.issued_at = signed.artifact.valid_from.clone();
+    signed.statement.expires_at = signed.artifact.valid_until.clone();
+    resign_reliability_statement(signed, signing_key)
+}
+
+fn resign_reliability_statement(
+    signed: &mut SignedReliabilityArtifactV1,
+    signing_key: &SigningKey,
+) -> Result<(), Box<dyn std::error::Error>> {
+    signed.statement.signature_hex.clear();
+    signed.statement.signature_hex = HEXLOWER.encode(
+        &signing_key
+            .sign(&signed.statement.signing_message()?)
+            .to_bytes(),
+    );
+    Ok(())
 }
 
 fn timestamp(value: &str) -> Result<UtcTimestamp, Box<dyn std::error::Error>> {

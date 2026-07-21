@@ -5,7 +5,9 @@ use std::{collections::BTreeMap, env, fs, path::PathBuf, process::ExitCode};
 use hyperintel_assurance::{RegisteredVerificationKeyV1, VerificationKeyRegistry};
 use hyperintel_core::Sha256Digest;
 use hyperintel_market::{
-    MarketEvidenceBundleV1, SignedMarketEvidenceBundleV2, verify_market_evidence_bundle_v1,
+    MarketEvidenceBundleV1, ReliabilityArtifactVerifiedMarketEvidenceBundleV3,
+    SignedMarketEvidenceBundleV2, SignedReliabilityArtifactV1, verify_market_evidence_bundle_v1,
+    verify_reliability_artifact_verified_market_evidence_bundle_v3,
     verify_signed_market_evidence_bundle_v2,
 };
 use serde::Deserialize;
@@ -24,7 +26,16 @@ struct VerificationInputV2 {
     assurance_blobs: BTreeMap<Sha256Digest, Vec<u8>>,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct VerificationInputV3 {
+    bundle: ReliabilityArtifactVerifiedMarketEvidenceBundleV3,
+    assurance_blobs: BTreeMap<Sha256Digest, Vec<u8>>,
+    reliability_artifacts: BTreeMap<Sha256Digest, SignedReliabilityArtifactV1>,
+}
+
 enum VerificationInput {
+    ReliabilityV3(VerificationInputV3),
     SignedV2(VerificationInputV2),
     LegacyV1(VerificationInputV1),
 }
@@ -81,6 +92,15 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         trusted_registry.register(key)?;
     }
     let bundle_digest = match input {
+        VerificationInput::ReliabilityV3(input) => {
+            verify_reliability_artifact_verified_market_evidence_bundle_v3(
+                &input.bundle,
+                &input.assurance_blobs,
+                &input.reliability_artifacts,
+                &trusted_registry,
+            )?;
+            input.bundle.bundle_digest
+        }
         VerificationInput::SignedV2(input) => {
             verify_signed_market_evidence_bundle_v2(
                 &input.bundle,
@@ -107,6 +127,9 @@ fn decode_verification_input(
 ) -> Result<VerificationInput, Box<dyn std::error::Error>> {
     let probe: VerificationInputProbe = serde_json::from_slice(input_bytes)?;
     match probe.bundle.schema_version.as_str() {
+        "hyperintel.market-evidence-bundle.v3" => Ok(VerificationInput::ReliabilityV3(
+            serde_json::from_slice(input_bytes)?,
+        )),
         "hyperintel.market-evidence-bundle.v2" => Ok(VerificationInput::SignedV2(
             serde_json::from_slice(input_bytes)?,
         )),
@@ -122,8 +145,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn contract_cli_dispatches_only_explicit_v1_or_v2_bundle_schemas() {
-        let unknown = br#"{"bundle":{"schema_version":"hyperintel.market-evidence-bundle.v3"}}"#;
+    fn contract_cli_dispatches_only_explicit_v1_v2_or_v3_bundle_schemas() {
+        let unknown = br#"{"bundle":{"schema_version":"hyperintel.market-evidence-bundle.v4"}}"#;
         assert!(
             decode_verification_input(unknown).is_err_and(
                 |error| error.to_string() == "unsupported market evidence bundle schema"
@@ -134,6 +157,8 @@ mod tests {
             br#"{"bundle":{"schema_version":"hyperintel.market-evidence-bundle.v1"}}"#;
         let incomplete_v2 =
             br#"{"bundle":{"schema_version":"hyperintel.market-evidence-bundle.v2"}}"#;
+        let incomplete_v3 =
+            br#"{"bundle":{"schema_version":"hyperintel.market-evidence-bundle.v3"}}"#;
         assert!(
             decode_verification_input(incomplete_v1).is_err_and(
                 |error| error.to_string() != "unsupported market evidence bundle schema"
@@ -141,6 +166,11 @@ mod tests {
         );
         assert!(
             decode_verification_input(incomplete_v2).is_err_and(
+                |error| error.to_string() != "unsupported market evidence bundle schema"
+            )
+        );
+        assert!(
+            decode_verification_input(incomplete_v3).is_err_and(
                 |error| error.to_string() != "unsupported market evidence bundle schema"
             )
         );
