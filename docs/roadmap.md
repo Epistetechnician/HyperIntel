@@ -2,8 +2,11 @@
 
 ## R0: local market kernel
 
-Current target: canonical domain objects, assurance envelopes, routing,
-receipts, settlement intent, portable evidence, CLI fixture, and hermetic tests.
+Implemented local target: canonical domain objects, assurance envelopes,
+provider-key signed-offer admission, routing, receipts, settlement intent,
+portable V1/V2 evidence, CLI verification, and hermetic tests. Remaining R0
+work includes typed reliability-artifact verification, a hermetic replay-state
+transition, fuller route rejection records, and direct CLI-process coverage.
 
 ## R1: private execution alpha
 

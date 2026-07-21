@@ -25,6 +25,15 @@ availability, operational risk inputs, settlement identity, and assurance
 evidence. A signed offer is an attributable declaration, not proof that the
 external service will perform.
 
+The local V2 admission path verifies the exact offer digest, provider and offer
+key identities, caller-assigned provider-key trust class, validity containment,
+revocation state, and binding to verified provider-authorization evidence. It
+does not supply, store, or operate a provider signing key.
+
+Distinct, fully authenticated offers cannot reuse one provider-key logical
+sequence. Sequence collisions are checked only after authentication so an
+invalid wrapper cannot deny routing to unaffected valid providers.
+
 ## Router contract
 
 The router first applies hard gates, then minimizes expected successful cost.

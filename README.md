@@ -7,12 +7,17 @@ The current repository implements a **local pure-data foundation only**:
 
 - canonical service, provider, offer, policy, route, metering, settlement, and
   evidence objects;
-- fail-closed eligibility;
+- fail-closed eligibility, including a V2 signed-offer path that verifies the
+  exact capacity-offer digest against the provider's configured offer key;
 - expected-successful-cost routing among economically eligible offers;
 - assurance envelopes with explicit assumptions, exclusions, maturity, and
   trust roots;
 - deterministic route, usage, settlement, and evidence identities;
 - an offline-verifiable end-to-end fixture.
+
+The unsigned-offer V1 bundle remains available only for schema compatibility
+and retains its explicit `no-capacity-offer-signature-verification` nonclaim.
+New local integrations should use the signed-offer V2 bundle.
 
 It does not contain provider networking, prompt transport, credential custody,
 GPU scheduling, wallet signing, EVM contracts, HyperCore actions, mainnet value
@@ -35,12 +40,14 @@ Exact source mappings and exclusions are recorded in
   inference-domain records.
 - `hyperintel-assurance`: claim-envelope algebra, acceptance policy, signatures,
   and generic assurance evidence sets.
-- `hyperintel-market`: eligibility, routing, receipts, metering, and deterministic
-  settlement intent, plus the complete portable market evidence bundle.
+- `hyperintel-market`: signed-offer admission, eligibility, routing, receipts,
+  metering, deterministic settlement intent, and portable V1/V2 market evidence
+  bundles.
 - `hyperintel-cli`: offline JSON bundle verifier; its only external effect is
   reading caller-selected evidence and trusted-key files and writing the verdict
-  to stdout. Bundle-disclosed keys receive no authority unless they exactly
-  match the separate caller-controlled trust registry.
+  to stdout. It dispatches only explicit V1/V2 bundle schema identifiers.
+  Bundle-disclosed keys receive no authority unless they exactly match the
+  separate caller-controlled trust registry.
 
 ## Validation
 
@@ -58,6 +65,7 @@ silently compiling the workspace with a different compiler.
 
 ## Governing documents
 
+- [`docs/e2e.md`](docs/e2e.md)
 - [`docs/product-plan.md`](docs/product-plan.md)
 - [`docs/product-contract.md`](docs/product-contract.md)
 - [`docs/architecture.md`](docs/architecture.md)

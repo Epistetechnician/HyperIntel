@@ -24,9 +24,11 @@ assurance evidence sets. This crate knows no routing or settlement types.
 ## `hyperintel-route-receipt-vertical-slice-v1`
 
 `crates/hyperintel-market/**` and `crates/hyperintel-cli/**`: fail-closed offer
-eligibility, expected-successful-cost routing, route receipts, metering-to-cost
-calculation, settlement conservation, deterministic idempotency, portable
-market-evidence assembly and reconstruction, and a hermetic local demonstration.
+eligibility, provider-key signed-capacity-offer admission,
+expected-successful-cost routing, route receipts, metering-to-cost calculation,
+settlement conservation, deterministic idempotency, compatible unsigned V1 and
+signed V2 market-evidence assembly and reconstruction, offline verification,
+and a hermetic local demonstration.
 
 ## Reserved future slices
 

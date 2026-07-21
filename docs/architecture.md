@@ -19,7 +19,9 @@ The current implementation covers only pure-data portions of planes 2–4.
 
 ```text
 ServiceSpecV1 + ProviderIdentityV1 + CapacityOfferV1
+  + SignedCapacityOfferV1
   + InferenceRequestPolicyV1 + AssuranceAcceptancePolicyV1
+  -> provider-key offer authentication
   -> fail-closed eligibility
   -> expected-successful-cost selection
   -> RouteReceiptV1
@@ -28,6 +30,19 @@ ServiceSpecV1 + ProviderIdentityV1 + CapacityOfferV1
   -> portable MarketEvidenceBundleV1
   -> offline verification
 ```
+
+`SignedCapacityOfferV1` binds the canonical offer digest to the provider's
+configured offer key, a caller-classified `ProviderKey`, the verified provider
+authorization envelope, and contained validity windows. Invalid offers remain
+ineligible regardless of price. `SignedMarketEvidenceBundleV2` reconstructs
+this check. `MarketEvidenceBundleV1` remains a compatibility schema and keeps
+its unsigned-offer nonclaim.
+
+Two distinct offers that both authenticate under one provider key and logical
+sequence are treated as verified equivocation and block the signed batch.
+Unverified spoofed sequence fields remain ordinary ineligible offers and cannot
+poison fallback to valid supply. Rejected attacker-claimed keys are retained in
+the signed wrapper for reconstruction but are never promoted into caller trust.
 
 Assurance requirements are hard gates. They are never converted into a scalar
 that a cheaper offer can offset.

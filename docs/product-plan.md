@@ -72,10 +72,12 @@ buyer policy + maximum authorization
   -> portable evidence bundle and optional public commitment
 ```
 
-The current R0 slice ends at a non-authoritative settlement intent. It does not
-verify capacity-offer signatures, provider/buyer execution-receipt signatures,
-live consumed-nonce state, reliability artifacts, bonds, SLA credits, chain
-commitments, or value movement.
+The current R0 slice ends at a non-authoritative settlement intent. Its V2 path
+verifies capacity-offer signatures against caller-supplied trust and preserves
+the V1 unsigned bundle only for compatibility. It does not verify
+provider/buyer execution-receipt signatures, live consumed-nonce state,
+reliability artifacts, bonds, SLA credits, chain commitments, or value
+movement.
 
 ## System boundary
 

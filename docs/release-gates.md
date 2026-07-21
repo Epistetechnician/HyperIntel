@@ -32,6 +32,12 @@ No lower state implies a higher one.
 - Arithmetic is checked and settlement conserves value.
 - Ineligible supply cannot win regardless of price.
 - Route selection is permutation invariant with explicit tie-breaking.
+- The V2 path verifies each exact capacity-offer digest against the configured
+  provider offer key, caller trust class, provider-assurance binding, validity,
+  and revocation state. V1 remains an explicitly unsigned compatibility schema.
+- Verified same-key sequence equivocation blocks the signed batch; unverified
+  spoofed sequence fields cannot poison fallback, and rejected claimed keys do
+  not become caller-trusted disclosures.
 - Route identity commits to the buyer-supplied replay snapshot and declared
   reliability inputs. R0 does not enforce consumed nonces or verify that the
   reliability artifact establishes the declared probability.

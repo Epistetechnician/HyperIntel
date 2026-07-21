@@ -4,8 +4,10 @@
 
 HyperIntel contains a local, hermetic, pure-data implementation of one scoped
 inference-market decision path. Its tests can show that the implemented fixture
-obeys the named validation, routing, arithmetic, digest, signature, and replay
-rules.
+obeys the named validation, routing, arithmetic, digest, evidence-signature,
+signed-capacity-offer, and deterministic reconstruction rules. The V2 path
+checks offer attribution against caller-supplied trust; it grants no external
+execution or provider authority.
 
 ## Unsupported claims
 
@@ -15,7 +17,10 @@ The repository does not establish:
 - model or output correctness, truthfulness, safety, or alignment;
 - confidential execution;
 - provider authorization in the external world;
-- cryptographic verification of capacity-offer signatures;
+- capacity-offer signature verification in the V1 compatibility bundle, which
+  retains its explicit unsigned-offer nonclaim;
+- production offer-signing authority, key custody, or external provider
+  authorization;
 - consumed-nonce or replay-state enforcement beyond committing the buyer's
   supplied snapshot digest;
 - verification that an offer's declared success probability is established by

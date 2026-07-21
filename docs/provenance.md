@@ -17,6 +17,10 @@ Generalized foundations:
 - `crates/outcomes-domain/src/timestamp.rs` -> canonical UTC whole-second time.
 - `crates/outcomes-evidence/src/lib.rs` -> offline bundle verification,
   activation/revocation-aware signature patterns, and tamper rejection.
+  HyperIntel's signed-capacity-offer V2 path reuses only this already
+  generalized caller-owned registry and canonical Ed25519 verification pattern;
+  it adds inference-native offer/provider/envelope binding without copying an
+  outcome schema or development signer.
 - `crates/outcomes-settlement/src/lib.rs` -> deterministic intent identity,
   canonical payloads, idempotency, and fail-closed preflight patterns.
 
