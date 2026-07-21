@@ -27,8 +27,12 @@ assurance evidence sets. This crate knows no routing or settlement types.
 eligibility, provider-key signed-capacity-offer admission,
 expected-successful-cost routing, route receipts, metering-to-cost calculation,
 settlement conservation, deterministic idempotency, compatible unsigned V1 and
-signed V2 market-evidence assembly and reconstruction, offline verification,
-and a hermetic local demonstration.
+signed V2 market-evidence assembly and reconstruction, typed reliability-artifact
+identity, caller-trusted verifier signatures, binding, validity, and exact-ratio
+verification through an additive V3 market-evidence profile, offline verification,
+and a hermetic local demonstration. Reliability-artifact verification grants no
+authority and makes no claim about observation authenticity, representative
+sampling, calibration, stationarity, or future provider performance.
 
 ## Reserved future slices
 
