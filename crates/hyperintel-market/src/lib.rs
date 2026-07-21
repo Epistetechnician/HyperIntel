@@ -7,16 +7,18 @@ mod evidence;
 mod metering;
 mod offer_admission;
 mod reliability;
+mod replay;
 mod routing;
 mod settlement;
 
 pub use evidence::{
     MarketEvidenceBundleV1, MarketEvidenceError, ReliabilityArtifactVerifiedMarketEvidenceBundleV3,
-    SignedMarketEvidenceBundleV2, build_market_evidence_bundle_v1,
-    build_reliability_artifact_verified_market_evidence_bundle_v3,
-    build_signed_market_evidence_bundle_v2, verify_market_evidence_bundle_v1,
+    ReplayProtectedMarketEvidenceBundleV4, SignedMarketEvidenceBundleV2,
+    build_market_evidence_bundle_v1, build_reliability_artifact_verified_market_evidence_bundle_v3,
+    build_replay_protected_market_evidence_bundle_v4, build_signed_market_evidence_bundle_v2,
+    verify_market_evidence_bundle_v1,
     verify_reliability_artifact_verified_market_evidence_bundle_v3,
-    verify_signed_market_evidence_bundle_v2,
+    verify_replay_protected_market_evidence_bundle_v4, verify_signed_market_evidence_bundle_v2,
 };
 pub use metering::{
     ExecutionStatusV1, MeteringError, MeteringReceiptDraftV1, MeteringReceiptV1,
@@ -31,11 +33,18 @@ pub use reliability::{
     build_reliability_artifact_v1, derive_observed_success_probability_v1,
     verify_offer_reliability_v1, verify_signed_reliability_artifact_v1,
 };
+pub use replay::{
+    BuyerReplayStateV1, ReplayError, ReplayStateTransitionV1, build_buyer_replay_state_v1,
+    derive_replay_state_transition_v1, validate_buyer_replay_state_v1,
+    verify_replay_state_transition_v1,
+};
 pub use routing::{
     CostQuoteV1, EligibilityFailureV1, EligibilityReportV1, OfferRouteRecordV1,
-    ReliabilityArtifactVerifiedRoutingContextV1, RouteDecisionV1, RoutingContextV1, RoutingError,
-    SignedRoutingContextV1, select_reliability_artifact_verified_route_v1, select_route_v1,
-    select_signed_route_v1,
+    ReliabilityArtifactVerifiedRoutingContextV1, RouteDecisionV1, RouteEvaluationOutcomeV1,
+    RouteEvaluationRecordV1, RoutingContextV1, RoutingError, SignedRoutingContextV1,
+    evaluate_reliability_artifact_verified_route_v1, evaluate_route_v1, evaluate_signed_route_v1,
+    select_reliability_artifact_verified_route_v1, select_route_v1, select_signed_route_v1,
+    validate_eligibility_report_v1, validate_route_evaluation_record_v1,
 };
 pub use settlement::{
     SettlementError, SettlementIntentV1, derive_settlement_intent_v1, validate_settlement_intent_v1,

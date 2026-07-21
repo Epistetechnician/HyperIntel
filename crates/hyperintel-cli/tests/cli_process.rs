@@ -1,0 +1,95 @@
+//! Real-process contract coverage for the offline verifier boundary.
+
+use std::{path::PathBuf, process::Command};
+
+fn fixture_path(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
+        .join(name)
+}
+
+fn run_cli(arguments: &[PathBuf]) -> Result<std::process::Output, Box<dyn std::error::Error>> {
+    Ok(Command::new(env!("CARGO_BIN_EXE_hyperintel-cli"))
+        .args(arguments)
+        .output()?)
+}
+
+#[test]
+fn contract_cli_process_verifies_v4_with_separate_caller_trust()
+-> Result<(), Box<dyn std::error::Error>> {
+    let output = run_cli(&[
+        fixture_path("evidence-v4.json"),
+        fixture_path("trusted-keys-v4.json"),
+    ])?;
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout)?,
+        "verified market evidence bundle 6ae73c889a82cdc83712260de55fb1e08d74064745b541a81138fb0bd797fd13\n"
+    );
+    assert!(output.stderr.is_empty());
+    Ok(())
+}
+
+#[test]
+fn contract_cli_process_rejects_missing_trust_and_unknown_schema()
+-> Result<(), Box<dyn std::error::Error>> {
+    let untrusted = run_cli(&[
+        fixture_path("evidence-v4.json"),
+        fixture_path("empty-trusted-keys.json"),
+    ])?;
+    assert!(!untrusted.status.success());
+    assert!(untrusted.stdout.is_empty());
+    assert!(String::from_utf8(untrusted.stderr)?.contains(
+        "hyperintel verification failed: bundle verification key is not an exact caller-trusted key"
+    ));
+
+    let unsupported = run_cli(&[
+        fixture_path("unsupported-v5.json"),
+        fixture_path("trusted-keys-v4.json"),
+    ])?;
+    assert!(!unsupported.status.success());
+    assert!(unsupported.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8(unsupported.stderr)?,
+        "hyperintel verification failed: unsupported market evidence bundle schema\n"
+    );
+    Ok(())
+}
+
+#[test]
+fn contract_cli_process_rejects_invalid_argument_and_file_boundaries()
+-> Result<(), Box<dyn std::error::Error>> {
+    let no_arguments = run_cli(&[])?;
+    assert!(!no_arguments.status.success());
+    assert!(String::from_utf8(no_arguments.stderr)?.contains("usage: "));
+
+    let one_argument = run_cli(&[fixture_path("evidence-v4.json")])?;
+    assert!(!one_argument.status.success());
+    assert_eq!(
+        String::from_utf8(one_argument.stderr)?,
+        "hyperintel verification failed: missing caller-controlled trusted-key file\n"
+    );
+
+    let extra_argument = run_cli(&[
+        fixture_path("evidence-v4.json"),
+        fixture_path("trusted-keys-v4.json"),
+        fixture_path("empty-trusted-keys.json"),
+    ])?;
+    assert!(!extra_argument.status.success());
+    assert_eq!(
+        String::from_utf8(extra_argument.stderr)?,
+        "hyperintel verification failed: expected exactly two input paths\n"
+    );
+
+    let missing_file = run_cli(&[
+        fixture_path("absent-evidence.json"),
+        fixture_path("trusted-keys-v4.json"),
+    ])?;
+    assert!(!missing_file.status.success());
+    assert!(missing_file.stdout.is_empty());
+    assert!(
+        String::from_utf8(missing_file.stderr)?.starts_with("hyperintel verification failed: ")
+    );
+    Ok(())
+}

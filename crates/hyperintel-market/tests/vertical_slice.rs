@@ -17,17 +17,22 @@ use hyperintel_core::{
     UtcTimestamp,
 };
 use hyperintel_market::{
-    ExecutionStatusV1, MarketEvidenceBundleV1, MeteringReceiptDraftV1, ReliabilityArtifactDraftV1,
-    ReliabilityArtifactError, ReliabilityArtifactVerifiedMarketEvidenceBundleV3,
-    ReliabilityArtifactVerifiedRoutingContextV1, ReliabilityVerifierStatementV1, RouteDecisionV1,
-    RoutingContextV1, RoutingError, SignedCapacityOfferV1, SignedMarketEvidenceBundleV2,
-    SignedReliabilityArtifactV1, SignedRoutingContextV1, build_market_evidence_bundle_v1,
+    BuyerReplayStateV1, EligibilityFailureV1, ExecutionStatusV1, MarketEvidenceBundleV1,
+    MeteringReceiptDraftV1, ReliabilityArtifactDraftV1, ReliabilityArtifactError,
+    ReliabilityArtifactVerifiedMarketEvidenceBundleV3, ReliabilityArtifactVerifiedRoutingContextV1,
+    ReliabilityVerifierStatementV1, ReplayError, ReplayProtectedMarketEvidenceBundleV4,
+    RouteDecisionV1, RouteEvaluationOutcomeV1, RouteEvaluationRecordV1, RoutingContextV1,
+    RoutingError, SignedCapacityOfferV1, SignedMarketEvidenceBundleV2, SignedReliabilityArtifactV1,
+    SignedRoutingContextV1, build_buyer_replay_state_v1, build_market_evidence_bundle_v1,
     build_metering_receipt_v1, build_reliability_artifact_v1,
     build_reliability_artifact_verified_market_evidence_bundle_v3,
-    build_signed_market_evidence_bundle_v2, derive_observed_success_probability_v1,
-    derive_settlement_intent_v1, select_reliability_artifact_verified_route_v1, select_route_v1,
-    select_signed_route_v1, verify_market_evidence_bundle_v1,
+    build_replay_protected_market_evidence_bundle_v4, build_signed_market_evidence_bundle_v2,
+    derive_observed_success_probability_v1, derive_replay_state_transition_v1,
+    derive_settlement_intent_v1, evaluate_reliability_artifact_verified_route_v1,
+    select_reliability_artifact_verified_route_v1, select_route_v1, select_signed_route_v1,
+    validate_route_evaluation_record_v1, verify_market_evidence_bundle_v1,
     verify_reliability_artifact_verified_market_evidence_bundle_v3,
+    verify_replay_protected_market_evidence_bundle_v4, verify_replay_state_transition_v1,
     verify_signed_market_evidence_bundle_v2, verify_signed_reliability_artifact_v1,
 };
 
@@ -241,6 +246,219 @@ fn contract_reliability_v3_reconstructs_and_has_stable_golden_digests()
             &fixture.reliability_artifacts,
         )?,
         reliability_route(&fixture)?,
+    );
+    Ok(())
+}
+
+#[test]
+fn contract_replay_protected_v4_reconstructs_selected_route_and_nonce_transition()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (fixture, before_state) = replay_protected_fixture()?;
+    let bundle = replay_protected_bundle(&fixture, &before_state)?;
+    verify_replay_protected_market_evidence_bundle_v4(
+        &bundle,
+        &fixture.fixture.assurance_blobs,
+        &fixture.reliability_artifacts,
+        &fixture.fixture.registry,
+    )?;
+    let RouteEvaluationOutcomeV1::Selected(route) = &bundle.route_evaluation.outcome else {
+        return Err("selected V4 fixture produced a denial".into());
+    };
+    assert_eq!(route.selected_provider_id.as_str(), "provider:beta");
+    assert_eq!(bundle.replay_transition.before_state, before_state);
+    assert_eq!(bundle.replay_transition.consumed_nonce, 1);
+    assert_eq!(bundle.replay_transition.after_state.next_nonce, 2);
+    assert!(!bundle.replay_transition.authority_granted);
+    assert!(bundle.metering.is_some());
+    assert!(bundle.settlement.is_some());
+    assert_eq!(
+        bundle.route_evaluation.evaluation_digest.to_hex(),
+        "755067bb504a4f013d12c7ab91426b2441ed0dbd8be4816af3cd43020abbc05a"
+    );
+    assert_eq!(
+        bundle.replay_transition.transition_digest.to_hex(),
+        "157ccf6d6486add67e4d3299c12661d026d5872f19aae922ad6f598f698d9907"
+    );
+    assert_eq!(
+        bundle.bundle_digest.to_hex(),
+        "6ae73c889a82cdc83712260de55fb1e08d74064745b541a81138fb0bd797fd13"
+    );
+    assert!(bundle.explicit_nonclaims.iter().any(|claim| {
+        claim == "no-buyer-policy-authentication-or-durable-atomic-replay-state-enforcement"
+    }));
+    assert!(
+        !bundle
+            .explicit_nonclaims
+            .iter()
+            .any(|claim| claim == "no-consumed-nonce-or-replay-state-enforcement")
+    );
+
+    let encoded = serde_json::to_vec(&bundle)?;
+    let decoded: ReplayProtectedMarketEvidenceBundleV4 = serde_json::from_slice(&encoded)?;
+    assert_eq!(decoded, bundle);
+
+    let mut reversed_offers = fixture.fixture.signed_offers.clone();
+    reversed_offers.reverse();
+    let rebuilt = evaluate_reliability_artifact_verified_route_v1(
+        &ReliabilityArtifactVerifiedRoutingContextV1 {
+            evaluated_at: &fixture.fixture.evaluated_at,
+            service: &fixture.fixture.service,
+            providers: &fixture.fixture.providers,
+            offers: &reversed_offers,
+            policy: &fixture.fixture.policy,
+            assurance_sets: &fixture.fixture.assurance_sets,
+            assurance_blobs: &fixture.fixture.assurance_blobs,
+            reliability_artifacts: &fixture.reliability_artifacts,
+            verification_keys: &fixture.fixture.registry,
+        },
+    )?;
+    assert_eq!(rebuilt, bundle.route_evaluation);
+    Ok(())
+}
+
+#[test]
+fn contract_replay_protected_v4_retains_all_typed_rejections_without_fill_artifacts()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (mut fixture, before_state) = replay_protected_fixture()?;
+    fixture.fixture.policy.minimum_success_probability = PartsPerMillion::new(1_000_000)?;
+    let bundle = replay_protected_bundle(&fixture, &before_state)?;
+    verify_replay_protected_market_evidence_bundle_v4(
+        &bundle,
+        &fixture.fixture.assurance_blobs,
+        &fixture.reliability_artifacts,
+        &fixture.fixture.registry,
+    )?;
+    assert!(matches!(
+        bundle.route_evaluation.outcome,
+        RouteEvaluationOutcomeV1::NoEligibleOffer
+    ));
+    assert_eq!(bundle.route_evaluation.eligibility_reports.len(), 2);
+    assert!(bundle
+        .route_evaluation
+        .eligibility_reports
+        .iter()
+        .all(|report| report.failures == [EligibilityFailureV1::SuccessProbabilityBelowMinimum]));
+    assert!(bundle.metering.is_none());
+    assert!(bundle.settlement.is_none());
+    assert_eq!(bundle.replay_transition.after_state.next_nonce, 2);
+
+    let mut reordered = bundle.clone();
+    reordered.route_evaluation.eligibility_reports.reverse();
+    assert!(validate_route_evaluation_record_v1(&reordered.route_evaluation).is_err());
+
+    let mut fabricated_fill = bundle;
+    let (selected_fixture, selected_state) = replay_protected_fixture()?;
+    fabricated_fill.metering =
+        replay_protected_bundle(&selected_fixture, &selected_state)?.metering;
+    assert!(
+        verify_replay_protected_market_evidence_bundle_v4(
+            &fabricated_fill,
+            &fixture.fixture.assurance_blobs,
+            &fixture.reliability_artifacts,
+            &fixture.fixture.registry,
+        )
+        .is_err()
+    );
+    Ok(())
+}
+
+#[test]
+fn contract_replay_transition_fails_closed_on_stale_gap_exhausted_or_tampered_state()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (fixture, before_state) = replay_protected_fixture()?;
+    let evaluation = reliability_evaluation(&fixture)?;
+    let transition = derive_replay_state_transition_v1(
+        &before_state,
+        &fixture.fixture.policy,
+        evaluation.evaluation_digest,
+        &fixture.fixture.evaluated_at,
+    )?;
+    verify_replay_state_transition_v1(
+        &transition,
+        &fixture.fixture.policy,
+        evaluation.evaluation_digest,
+        &fixture.fixture.evaluated_at,
+    )?;
+
+    let mut stale_policy = fixture.fixture.policy.clone();
+    stale_policy.replay_snapshot_digest = transition.after_state.state_digest;
+    assert!(matches!(
+        derive_replay_state_transition_v1(
+            &transition.after_state,
+            &stale_policy,
+            evaluation.evaluation_digest,
+            &fixture.fixture.evaluated_at,
+        ),
+        Err(ReplayError::NonceAlreadyConsumed)
+    ));
+
+    let gap_state = build_buyer_replay_state_v1(stale_policy.buyer_id.clone(), 0)?;
+    let mut gap_policy = stale_policy.clone();
+    gap_policy.replay_snapshot_digest = gap_state.state_digest;
+    assert!(matches!(
+        derive_replay_state_transition_v1(
+            &gap_state,
+            &gap_policy,
+            evaluation.evaluation_digest,
+            &fixture.fixture.evaluated_at,
+        ),
+        Err(ReplayError::NonceGap)
+    ));
+
+    let exhausted_state = build_buyer_replay_state_v1(stale_policy.buyer_id.clone(), u64::MAX)?;
+    let mut exhausted_policy = stale_policy;
+    exhausted_policy.nonce = u64::MAX;
+    exhausted_policy.replay_snapshot_digest = exhausted_state.state_digest;
+    assert!(matches!(
+        derive_replay_state_transition_v1(
+            &exhausted_state,
+            &exhausted_policy,
+            evaluation.evaluation_digest,
+            &fixture.fixture.evaluated_at,
+        ),
+        Err(ReplayError::NonceExhausted)
+    ));
+
+    let mut tampered = transition;
+    tampered.after_state.next_nonce = 3;
+    assert!(matches!(
+        verify_replay_state_transition_v1(
+            &tampered,
+            &fixture.fixture.policy,
+            evaluation.evaluation_digest,
+            &fixture.fixture.evaluated_at,
+        ),
+        Err(ReplayError::TransitionDigestMismatch)
+    ));
+    Ok(())
+}
+
+#[test]
+fn contract_cli_v4_fixtures_match_the_canonical_selected_bundle()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (fixture, before_state) = replay_protected_fixture()?;
+    let bundle = replay_protected_bundle(&fixture, &before_state)?;
+    let evidence = format!(
+        "{}\n",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "bundle": bundle,
+            "assurance_blobs": fixture.fixture.assurance_blobs,
+            "reliability_artifacts": fixture.reliability_artifacts,
+        }))?
+    );
+    let trust = format!(
+        "{}\n",
+        serde_json::to_string_pretty(&serde_json::json!({
+            "trusted_verification_keys": fixture.fixture.verification_keys,
+        }))?
+    );
+    assert_eq!(
+        evidence.as_bytes(),
+        include_bytes!("../../hyperintel-cli/tests/fixtures/evidence-v4.json")
+    );
+    assert_eq!(
+        trust.as_bytes(),
+        include_bytes!("../../hyperintel-cli/tests/fixtures/trusted-keys-v4.json")
     );
     Ok(())
 }
@@ -1252,6 +1470,111 @@ fn reliability_bundle_with(
         settlement,
         vec![
             "capacity-offer authenticity is checked only against caller-supplied keys".to_owned(),
+            "reliability counts and source commitments are accepted only as verifier-signed supplied evidence".to_owned(),
+        ],
+    )?)
+}
+
+fn replay_protected_fixture()
+-> Result<(ReliabilityFixture, BuyerReplayStateV1), Box<dyn std::error::Error>> {
+    let mut fixture = reliability_fixture()?;
+    let before_state = build_buyer_replay_state_v1(
+        fixture.fixture.policy.buyer_id.clone(),
+        fixture.fixture.policy.nonce,
+    )?;
+    fixture.fixture.policy.replay_snapshot_digest = before_state.state_digest;
+    Ok((fixture, before_state))
+}
+
+fn reliability_evaluation(
+    fixture: &ReliabilityFixture,
+) -> Result<RouteEvaluationRecordV1, Box<dyn std::error::Error>> {
+    Ok(evaluate_reliability_artifact_verified_route_v1(
+        &ReliabilityArtifactVerifiedRoutingContextV1 {
+            evaluated_at: &fixture.fixture.evaluated_at,
+            service: &fixture.fixture.service,
+            providers: &fixture.fixture.providers,
+            offers: &fixture.fixture.signed_offers,
+            policy: &fixture.fixture.policy,
+            assurance_sets: &fixture.fixture.assurance_sets,
+            assurance_blobs: &fixture.fixture.assurance_blobs,
+            reliability_artifacts: &fixture.reliability_artifacts,
+            verification_keys: &fixture.fixture.registry,
+        },
+    )?)
+}
+
+fn replay_protected_bundle(
+    fixture: &ReliabilityFixture,
+    before_state: &BuyerReplayStateV1,
+) -> Result<ReplayProtectedMarketEvidenceBundleV4, Box<dyn std::error::Error>> {
+    let evaluation = reliability_evaluation(fixture)?;
+    let replay_transition = derive_replay_state_transition_v1(
+        before_state,
+        &fixture.fixture.policy,
+        evaluation.evaluation_digest,
+        &fixture.fixture.evaluated_at,
+    )?;
+    let (metering, settlement) = match &evaluation.outcome {
+        RouteEvaluationOutcomeV1::Selected(route) => {
+            let provider = fixture
+                .fixture
+                .providers
+                .get(&route.selected_provider_id)
+                .ok_or("selected provider missing")?;
+            let offer = fixture
+                .fixture
+                .offers
+                .iter()
+                .find(|offer| offer.digest().ok() == Some(route.selected_offer_digest))
+                .ok_or("selected offer missing")?;
+            let metering = build_metering_receipt_v1(
+                &fixture.fixture.service,
+                provider,
+                offer,
+                &fixture.fixture.policy,
+                route,
+                MeteringReceiptDraftV1 {
+                    started_at: timestamp("2026-07-20T12:00:01Z")?,
+                    first_token_at: timestamp("2026-07-20T12:00:02Z")?,
+                    completed_at: timestamp("2026-07-20T12:00:04Z")?,
+                    input_tokens: 900,
+                    output_tokens: 400,
+                    execution_status: ExecutionStatusV1::Completed,
+                    prompt_digest: fixture.fixture.policy.prompt_digest,
+                    output_digest: Sha256Digest::from_bytes([31; 32]),
+                    provider_metering_evidence_digest: Sha256Digest::from_bytes([32; 32]),
+                    buyer_observation_digest: Some(Sha256Digest::from_bytes([33; 32])),
+                },
+            )?;
+            let settlement = derive_settlement_intent_v1(
+                &fixture.fixture.service,
+                provider,
+                offer,
+                &fixture.fixture.policy,
+                route,
+                &metering,
+                timestamp("2026-07-20T13:00:00Z")?,
+            )?;
+            (Some(metering), Some(settlement))
+        }
+        RouteEvaluationOutcomeV1::NoEligibleOffer => (None, None),
+    };
+    Ok(build_replay_protected_market_evidence_bundle_v4(
+        fixture.fixture.evaluated_at.clone(),
+        fixture.fixture.service.clone(),
+        fixture.fixture.providers.clone(),
+        fixture.fixture.signed_offers.clone(),
+        fixture.fixture.policy.clone(),
+        fixture.fixture.assurance_sets.clone(),
+        fixture.fixture.verification_keys.clone(),
+        evaluation,
+        replay_transition,
+        metering,
+        settlement,
+        vec![
+            "capacity-offer authenticity is checked only against caller-supplied keys".to_owned(),
+            "replay advancement is pure data over caller-supplied state".to_owned(),
             "reliability counts and source commitments are accepted only as verifier-signed supplied evidence".to_owned(),
         ],
     )?)

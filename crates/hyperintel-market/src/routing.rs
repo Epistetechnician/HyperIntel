@@ -267,6 +267,80 @@ struct RouteIdentity<'a> {
     authority_granted: bool,
 }
 
+/// Closed deterministic outcome of evaluating one complete candidate set.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "status",
+    content = "route",
+    rename_all = "SCREAMING_SNAKE_CASE",
+    deny_unknown_fields
+)]
+pub enum RouteEvaluationOutcomeV1 {
+    /// At least one candidate passed every hard gate and a route was selected.
+    Selected(Box<RouteDecisionV1>),
+    /// Every candidate failed at least one hard gate.
+    NoEligibleOffer,
+}
+
+/// Portable route evaluation retaining every typed eligibility report.
+///
+/// The record is pure data and grants no execution authority. Its reports expose the
+/// rejection bodies already committed by `RouteDecisionV1` candidate digests. Verification of
+/// this record proves only internal canonical consistency; reconstructing the reports from the
+/// original offers, evidence, and caller trust remains a separate check.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RouteEvaluationRecordV1 {
+    /// Fixed schema identifier.
+    pub schema_version: String,
+    /// Named state slice.
+    pub state_slice: String,
+    /// Required service specification.
+    pub service_spec_digest: Sha256Digest,
+    /// Buyer request policy.
+    pub request_policy_digest: Sha256Digest,
+    /// Buyer replay-state commitment before any future transition.
+    pub replay_snapshot_digest: Sha256Digest,
+    /// Frozen eligibility and admission profile identifier.
+    pub evaluation_profile: String,
+    /// Frozen routing algorithm identifier, including for an all-rejected outcome.
+    pub routing_algorithm: String,
+    /// Explicit evaluation time.
+    pub evaluated_at: UtcTimestamp,
+    /// One report per candidate, sorted by canonical offer digest.
+    pub eligibility_reports: Vec<EligibilityReportV1>,
+    /// Selected route or a deterministic all-rejected outcome.
+    pub outcome: RouteEvaluationOutcomeV1,
+    /// Pure-data records grant no execution authority.
+    pub authority_granted: bool,
+    /// Digest of every preceding field.
+    pub evaluation_digest: Sha256Digest,
+}
+
+impl RouteEvaluationRecordV1 {
+    fn into_selected_route(self) -> Result<RouteDecisionV1, RoutingError> {
+        match self.outcome {
+            RouteEvaluationOutcomeV1::Selected(route) => Ok(*route),
+            RouteEvaluationOutcomeV1::NoEligibleOffer => Err(RoutingError::NoEligibleOffer),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct RouteEvaluationIdentity<'a> {
+    schema_version: &'a str,
+    state_slice: &'a str,
+    service_spec_digest: Sha256Digest,
+    request_policy_digest: Sha256Digest,
+    replay_snapshot_digest: Sha256Digest,
+    evaluation_profile: &'a str,
+    routing_algorithm: &'a str,
+    evaluated_at: &'a UtcTimestamp,
+    eligibility_reports: &'a [EligibilityReportV1],
+    outcome: &'a RouteEvaluationOutcomeV1,
+    authority_granted: bool,
+}
+
 /// Routing and reconstruction failures.
 #[derive(Debug, Error)]
 pub enum RoutingError {
@@ -285,6 +359,18 @@ pub enum RoutingError {
     /// Required provider is absent.
     #[error("selected provider is absent")]
     ProviderUnknown,
+    /// Route-evaluation schema or state slice is unsupported.
+    #[error("unsupported route evaluation record")]
+    UnsupportedRouteEvaluation,
+    /// Route-evaluation fields or report linkages are inconsistent.
+    #[error("invalid route evaluation record")]
+    InvalidRouteEvaluation,
+    /// Eligibility-report self-digest differs from its canonical identity.
+    #[error("eligibility report digest mismatch")]
+    EligibilityReportDigestMismatch,
+    /// Route-evaluation self-digest differs from its canonical identity.
+    #[error("route evaluation digest mismatch")]
+    RouteEvaluationDigestMismatch,
     /// Exact arithmetic failed.
     #[error("route arithmetic failed: {0}")]
     Arithmetic(#[from] ExactArithmeticError),
@@ -303,7 +389,22 @@ pub enum RoutingError {
 /// Returns on duplicate identity, canonicalization, arithmetic, or no eligible
 /// offer. Ineligible offers remain visible in the decision candidate set.
 pub fn select_route_v1(context: &RoutingContextV1<'_>) -> Result<RouteDecisionV1, RoutingError> {
-    select_route_internal(context, None, None)
+    evaluate_route_v1(context)?.into_selected_route()
+}
+
+/// Evaluate every offer and retain canonical typed rejection records.
+///
+/// Unlike [`select_route_v1`], an all-rejected candidate set is a successful evaluation with a
+/// [`RouteEvaluationOutcomeV1::NoEligibleOffer`] outcome. Duplicate offers and failures that
+/// prevent deterministic evaluation remain errors.
+///
+/// # Errors
+///
+/// Returns on duplicate identity, canonicalization, or arithmetic failure.
+pub fn evaluate_route_v1(
+    context: &RoutingContextV1<'_>,
+) -> Result<RouteEvaluationRecordV1, RoutingError> {
+    evaluate_route_internal(context, None, None)
 }
 
 /// Select among offers only after provider-key authentication of each exact offer digest.
@@ -319,6 +420,21 @@ pub fn select_route_v1(context: &RoutingContextV1<'_>) -> Result<RouteDecisionV1
 pub fn select_signed_route_v1(
     context: &SignedRoutingContextV1<'_>,
 ) -> Result<RouteDecisionV1, RoutingError> {
+    evaluate_signed_route_v1(context)?.into_selected_route()
+}
+
+/// Evaluate provider-authenticated offers and retain every typed eligibility report.
+///
+/// An all-rejected set returns a valid denial record. Fully verified signing-sequence
+/// equivocation remains a batch error rather than a candidate-scoped rejection.
+///
+/// # Errors
+///
+/// Returns on duplicate offer identity, verified signing-sequence equivocation,
+/// canonicalization, or arithmetic failure.
+pub fn evaluate_signed_route_v1(
+    context: &SignedRoutingContextV1<'_>,
+) -> Result<RouteEvaluationRecordV1, RoutingError> {
     let mut offers = Vec::with_capacity(context.offers.len());
     let mut signed_by_digest = BTreeMap::new();
     for signed_offer in context.offers {
@@ -341,7 +457,7 @@ pub fn select_signed_route_v1(
         assurance_blobs: context.assurance_blobs,
         verification_keys: context.verification_keys,
     };
-    select_route_internal(&unsigned_context, Some(&signed_by_digest), None)
+    evaluate_route_internal(&unsigned_context, Some(&signed_by_digest), None)
 }
 
 /// Select among provider-authenticated offers whose typed reliability artifact also verifies.
@@ -357,6 +473,21 @@ pub fn select_signed_route_v1(
 pub fn select_reliability_artifact_verified_route_v1(
     context: &ReliabilityArtifactVerifiedRoutingContextV1<'_>,
 ) -> Result<RouteDecisionV1, RoutingError> {
+    evaluate_reliability_artifact_verified_route_v1(context)?.into_selected_route()
+}
+
+/// Evaluate signed offers with typed reliability checks and retain every eligibility report.
+///
+/// Missing or invalid reliability artifacts remain candidate-scoped failures. An all-rejected
+/// set returns a valid denial record, while verified sequence equivocation remains a batch error.
+///
+/// # Errors
+///
+/// Returns on duplicate offer identity, verified signing-sequence equivocation,
+/// canonicalization, or arithmetic failure.
+pub fn evaluate_reliability_artifact_verified_route_v1(
+    context: &ReliabilityArtifactVerifiedRoutingContextV1<'_>,
+) -> Result<RouteEvaluationRecordV1, RoutingError> {
     let mut offers = Vec::with_capacity(context.offers.len());
     let mut signed_by_digest = BTreeMap::new();
     for signed_offer in context.offers {
@@ -379,18 +510,18 @@ pub fn select_reliability_artifact_verified_route_v1(
         assurance_blobs: context.assurance_blobs,
         verification_keys: context.verification_keys,
     };
-    select_route_internal(
+    evaluate_route_internal(
         &unsigned_context,
         Some(&signed_by_digest),
         Some(context.reliability_artifacts),
     )
 }
 
-fn select_route_internal(
+fn evaluate_route_internal(
     context: &RoutingContextV1<'_>,
     signed_offers: Option<&BTreeMap<Sha256Digest, &SignedCapacityOfferV1>>,
     reliability_artifacts: Option<&BTreeMap<Sha256Digest, SignedReliabilityArtifactV1>>,
-) -> Result<RouteDecisionV1, RoutingError> {
+) -> Result<RouteEvaluationRecordV1, RoutingError> {
     let service_digest = context.service.digest()?;
     let policy_digest = context.policy.digest()?;
     let mut reports = Vec::with_capacity(context.offers.len());
@@ -416,8 +547,51 @@ fn select_route_internal(
     if let Some(reliability_artifacts) = reliability_artifacts {
         reject_verified_reliability_sequence_equivocation(context, reliability_artifacts)?;
     }
+    let (evaluation_profile, routing_algorithm) = if reliability_artifacts.is_some() {
+        (
+            "signed-capacity-offer-reliability-artifact-v1",
+            "expected-successful-cost-reliability-artifact-v1",
+        )
+    } else if signed_offers.is_some() {
+        ("signed-capacity-offer-v1", "expected-successful-cost-v1")
+    } else {
+        ("unsigned-capacity-offer-v1", "expected-successful-cost-v1")
+    };
 
-    let chosen = reports
+    let outcome = build_route_evaluation_outcome(
+        context,
+        &reports,
+        service_digest,
+        policy_digest,
+        routing_algorithm,
+    )?;
+    let mut evaluation = RouteEvaluationRecordV1 {
+        schema_version: "hyperintel.route-evaluation-record.v1".to_owned(),
+        state_slice: MARKET_STATE_SLICE_V1.to_owned(),
+        service_spec_digest: service_digest,
+        request_policy_digest: policy_digest,
+        replay_snapshot_digest: context.policy.replay_snapshot_digest,
+        evaluation_profile: evaluation_profile.to_owned(),
+        routing_algorithm: routing_algorithm.to_owned(),
+        evaluated_at: context.evaluated_at.clone(),
+        eligibility_reports: reports,
+        outcome,
+        authority_granted: false,
+        evaluation_digest: Sha256Digest::from_bytes([0; 32]),
+    };
+    evaluation.evaluation_digest = route_evaluation_digest(&evaluation)?;
+    validate_route_evaluation_record_v1(&evaluation)?;
+    Ok(evaluation)
+}
+
+fn build_route_evaluation_outcome(
+    context: &RoutingContextV1<'_>,
+    reports: &[EligibilityReportV1],
+    service_digest: Sha256Digest,
+    policy_digest: Sha256Digest,
+    routing_algorithm: &str,
+) -> Result<RouteEvaluationOutcomeV1, RoutingError> {
+    let Some((chosen_report, selected_cost)) = reports
         .iter()
         .filter_map(|report| {
             report
@@ -438,11 +612,13 @@ fn select_route_internal(
                 report.offer_digest,
             )
         })
-        .ok_or(RoutingError::NoEligibleOffer)?;
+    else {
+        return Ok(RouteEvaluationOutcomeV1::NoEligibleOffer);
+    };
     let selected_offer = context
         .offers
         .iter()
-        .find(|offer| offer.digest().ok() == Some(chosen.0.offer_digest))
+        .find(|offer| offer.digest().ok() == Some(chosen_report.offer_digest))
         .ok_or(RoutingError::NoEligibleOffer)?;
     let selected_provider = context
         .providers
@@ -473,20 +649,16 @@ fn select_route_internal(
         replay_snapshot_digest: context.policy.replay_snapshot_digest,
         candidates,
         selected_provider_id: selected_offer.provider_id.clone(),
-        selected_offer_digest: chosen.0.offer_digest,
+        selected_offer_digest: chosen_report.offer_digest,
         selected_provider_identity_digest: selected_provider.digest()?,
-        selected_cost: chosen.1,
-        routing_algorithm: if reliability_artifacts.is_some() {
-            "expected-successful-cost-reliability-artifact-v1".to_owned()
-        } else {
-            "expected-successful-cost-v1".to_owned()
-        },
+        selected_cost,
+        routing_algorithm: routing_algorithm.to_owned(),
         evaluated_at: context.evaluated_at.clone(),
         authority_granted: false,
         route_digest: Sha256Digest::from_bytes([0; 32]),
     };
     decision.route_digest = route_digest(&decision)?;
-    Ok(decision)
+    Ok(RouteEvaluationOutcomeV1::Selected(Box::new(decision)))
 }
 
 fn evaluate_offer(
@@ -910,6 +1082,184 @@ fn eligibility_digest(report: &EligibilityReportV1) -> Result<Sha256Digest, Cano
             eligible: report.eligible,
             failures: &report.failures,
             cost: report.cost,
+        },
+    )
+}
+
+/// Validate the canonical internal invariants of one disclosed eligibility report.
+///
+/// This checks schema, deterministic ordering, eligibility and arithmetic consistency, and the
+/// report self-digest. It does not re-evaluate the offer, evidence, or caller trust that produced
+/// the report.
+///
+/// # Errors
+///
+/// Returns when the report is unsupported, internally inconsistent, non-canonical, or tampered.
+pub fn validate_eligibility_report_v1(report: &EligibilityReportV1) -> Result<(), RoutingError> {
+    if report.schema_version != "hyperintel.eligibility-report.v1"
+        || report.state_slice != MARKET_STATE_SLICE_V1
+    {
+        return Err(RoutingError::UnsupportedRouteEvaluation);
+    }
+    if report.eligible != report.failures.is_empty()
+        || !report.failures.windows(2).all(|pair| pair[0] < pair[1])
+        || (report.cost.is_none()
+            != report
+                .failures
+                .contains(&EligibilityFailureV1::ArithmeticFailure))
+    {
+        return Err(RoutingError::InvalidRouteEvaluation);
+    }
+    if eligibility_digest(report)? != report.report_digest {
+        return Err(RoutingError::EligibilityReportDigestMismatch);
+    }
+    Ok(())
+}
+
+/// Validate one portable route evaluation and every report-to-candidate linkage.
+///
+/// This checks canonical ordering, unique one-to-one report commitments, shared context,
+/// selection consistency, authority denial, and all nested and enclosing self-digests. It does
+/// not reconstruct eligibility from the original offer/evidence inputs.
+///
+/// # Errors
+///
+/// Returns when any schema, ordering, linkage, outcome, authority, or digest invariant fails.
+pub fn validate_route_evaluation_record_v1(
+    evaluation: &RouteEvaluationRecordV1,
+) -> Result<(), RoutingError> {
+    if evaluation.schema_version != "hyperintel.route-evaluation-record.v1"
+        || evaluation.state_slice != MARKET_STATE_SLICE_V1
+    {
+        return Err(RoutingError::UnsupportedRouteEvaluation);
+    }
+    if evaluation.authority_granted
+        || !matches!(
+            (
+                evaluation.evaluation_profile.as_str(),
+                evaluation.routing_algorithm.as_str()
+            ),
+            (
+                "unsigned-capacity-offer-v1" | "signed-capacity-offer-v1",
+                "expected-successful-cost-v1"
+            ) | (
+                "signed-capacity-offer-reliability-artifact-v1",
+                "expected-successful-cost-reliability-artifact-v1"
+            )
+        )
+        || !evaluation
+            .eligibility_reports
+            .windows(2)
+            .all(|pair| pair[0].offer_digest < pair[1].offer_digest)
+    {
+        return Err(RoutingError::InvalidRouteEvaluation);
+    }
+    for report in &evaluation.eligibility_reports {
+        validate_eligibility_report_v1(report)?;
+        if report.service_spec_digest != evaluation.service_spec_digest
+            || report.request_policy_digest != evaluation.request_policy_digest
+            || report.replay_snapshot_digest != evaluation.replay_snapshot_digest
+            || report.evaluated_at != evaluation.evaluated_at
+        {
+            return Err(RoutingError::InvalidRouteEvaluation);
+        }
+    }
+
+    match &evaluation.outcome {
+        RouteEvaluationOutcomeV1::Selected(route) => {
+            validate_selected_route_evaluation(evaluation, route)?;
+        }
+        RouteEvaluationOutcomeV1::NoEligibleOffer => {
+            if evaluation
+                .eligibility_reports
+                .iter()
+                .any(|report| report.eligible)
+            {
+                return Err(RoutingError::InvalidRouteEvaluation);
+            }
+        }
+    }
+    if route_evaluation_digest(evaluation)? != evaluation.evaluation_digest {
+        return Err(RoutingError::RouteEvaluationDigestMismatch);
+    }
+    Ok(())
+}
+
+fn validate_selected_route_evaluation(
+    evaluation: &RouteEvaluationRecordV1,
+    route: &RouteDecisionV1,
+) -> Result<(), RoutingError> {
+    if route.schema_version != "hyperintel.route-decision.v1"
+        || route.state_slice != MARKET_STATE_SLICE_V1
+        || route.service_spec_digest != evaluation.service_spec_digest
+        || route.request_policy_digest != evaluation.request_policy_digest
+        || route.replay_snapshot_digest != evaluation.replay_snapshot_digest
+        || route.evaluated_at != evaluation.evaluated_at
+        || route.routing_algorithm != evaluation.routing_algorithm
+        || route.authority_granted
+        || route.candidates.len() != evaluation.eligibility_reports.len()
+        || !route
+            .candidates
+            .windows(2)
+            .all(|pair| pair[0].offer_digest < pair[1].offer_digest)
+        || !matches!(
+            route.routing_algorithm.as_str(),
+            "expected-successful-cost-v1" | "expected-successful-cost-reliability-artifact-v1"
+        )
+        || route_digest(route)? != route.route_digest
+    {
+        return Err(RoutingError::InvalidRouteEvaluation);
+    }
+
+    for (candidate, report) in route.candidates.iter().zip(&evaluation.eligibility_reports) {
+        if candidate.offer_digest != report.offer_digest
+            || candidate.eligibility_report_digest != report.report_digest
+            || candidate.eligible != report.eligible
+            || candidate.cost != report.cost
+        {
+            return Err(RoutingError::InvalidRouteEvaluation);
+        }
+    }
+
+    let selected_candidate = route
+        .candidates
+        .iter()
+        .find(|candidate| candidate.offer_digest == route.selected_offer_digest)
+        .ok_or(RoutingError::InvalidRouteEvaluation)?;
+    let selected_report = evaluation
+        .eligibility_reports
+        .iter()
+        .find(|report| report.offer_digest == route.selected_offer_digest)
+        .ok_or(RoutingError::InvalidRouteEvaluation)?;
+    if !selected_candidate.eligible
+        || !selected_report.eligible
+        || selected_candidate.provider_id != route.selected_provider_id
+        || selected_candidate.cost != Some(route.selected_cost)
+        || selected_report.cost != Some(route.selected_cost)
+        || selected_report.provider_identity_digest != Some(route.selected_provider_identity_digest)
+    {
+        return Err(RoutingError::InvalidRouteEvaluation);
+    }
+    Ok(())
+}
+
+pub(crate) fn route_evaluation_digest(
+    evaluation: &RouteEvaluationRecordV1,
+) -> Result<Sha256Digest, CanonicalizationError> {
+    domain_separated_digest(
+        "hyperintel.route-evaluation-record.v1",
+        &RouteEvaluationIdentity {
+            schema_version: &evaluation.schema_version,
+            state_slice: &evaluation.state_slice,
+            service_spec_digest: evaluation.service_spec_digest,
+            request_policy_digest: evaluation.request_policy_digest,
+            replay_snapshot_digest: evaluation.replay_snapshot_digest,
+            evaluation_profile: &evaluation.evaluation_profile,
+            routing_algorithm: &evaluation.routing_algorithm,
+            evaluated_at: &evaluation.evaluated_at,
+            eligibility_reports: &evaluation.eligibility_reports,
+            outcome: &evaluation.outcome,
+            authority_granted: evaluation.authority_granted,
         },
     )
 }
