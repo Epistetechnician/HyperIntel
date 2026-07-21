@@ -631,6 +631,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperintel-runtime-config"
+version = "0.1.0"
+dependencies = [
+ "hyperintel-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "icu_collections"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

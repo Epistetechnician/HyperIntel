@@ -9,6 +9,7 @@ members = [
   "crates/hyperintel-execution",
   "crates/hyperintel-execution-journal",
   "crates/hyperintel-reconciliation",
+  "crates/hyperintel-runtime-config",
 ]
 
 [workspace.package]
