@@ -13,7 +13,9 @@ HyperIntel separates five planes:
 5. **Financial risk**: a future executed-price index and separately gated HIP-3
    hedge, never inference delivery.
 
-The current implementation covers only pure-data portions of planes 2–4.
+The current implementation covers only pure-data portions of planes 1–4. Its
+execution-plane records verify signatures and bindings; they do not run or
+authorize an execution runtime.
 
 ## First vertical slice
 
@@ -73,6 +75,32 @@ evaluations. It does not authenticate the buyer or establish currentness,
 durable storage, atomic consumption, concurrency control, rollback resistance,
 or external enforcement.
 
+## Authenticated execution receipt tracer
+
+```text
+SignedInferenceRequestPolicyV1
+  + V4-grade signed offer, assurance, reliability, and replay inputs
+  -> caller-trusted BuyerPolicy signature verification
+  -> reconstructed selected route and replay transition
+  -> AuthenticatedExecutionAdmissionV1 (authority_granted = false)
+  -> ProviderExecutionReceiptV1
+  -> configured provider receipt-key signature verification
+  -> MeteringReceiptV1 reconstructed from signed usage and output commitments
+```
+
+The tracer is implemented at `dbfbd48`. Admission is available only for a
+reconstructed selected route. The buyer-policy statement binds the exact
+policy digest, replay snapshot, buyer, nonce, and validity window. The provider
+statement binds the exact completed receipt, admission, provider, configured
+receipt key, completion time, deadline, and nonzero sequence. Receipt usage is
+bounded by the policy, service, and selected offer; its runtime commitment must
+equal the selected service runtime.
+
+These checks create local authenticated evidence, not execution authority.
+There is no request release, socket, prompt transport, durable nonce consume,
+cancellation, retry, partial-output accounting, persistence, provider call,
+settlement submission, custody, or value movement.
+
 V1, V2, and V3 schemas and reconstruction behavior remain available unchanged,
 with selected-path and rejection/fallback golden commitments enforcing that
 compatibility boundary.
@@ -89,6 +117,8 @@ that a cheaper offer can offset.
 - HyperIntel validation and routing code.
 - Caller-controlled provider and verifier key registry, supplied separately
   from the evidence bundle. Bundle-disclosed keys must match it exactly.
+- Caller-controlled buyer-policy and provider-receipt keys for the execution
+  tracer. The provider receipt key must match the selected provider identity.
 - Key-validity and revocation-aware Ed25519 verification for domain-specific
   canonical messages. The assurance crate checks cryptography and caller trust;
   the owning protocol remains responsible for its message schema and bindings.

@@ -72,23 +72,23 @@ buyer policy + maximum authorization
   -> portable evidence bundle and optional public commitment
 ```
 
-The current R0 slice ends at a non-authoritative settlement intent. Its V2 path
+The R0 slice ends at a non-authoritative settlement intent. Its V2 path
 verifies capacity-offer signatures against caller-supplied trust. Its additive
 V3 path also verifies verifier-signed typed reliability identity, bindings,
 validity, and exact historical count arithmetic. The additive V4 path retains
 complete causal rejection records and a pure-data replay transition. V1, V2,
 and V3 retain their historical collapsed rejection semantics and narrower
-explicit nonclaims. R0 does not verify the underlying observation truth,
-provider/buyer execution-receipt signatures, live consumed-nonce state, bonds,
-SLA credits, chain commitments, or value movement.
+explicit nonclaims. R0 does not verify the underlying observation truth, live
+consumed-nonce state, bonds, SLA credits, chain commitments, or value movement.
 
-The first authorized R1 tracer authenticates the exact buyer policy against a
+The first implemented R1 tracer authenticates the exact buyer policy against a
 caller-owned key registry and binds a provider-signed completed-execution
 receipt to a reconstructed selected route from V4-grade signed-offer,
 assurance, reliability, and replay inputs. Existing metering is then
 reconstructed from the signed usage and output commitments. The tracer grants
 no request-release authority and adds no transport, persistence, cancellation,
-retry, custody, or value movement.
+retry, custody, or value movement. It is implemented at `dbfbd48` and does not
+by itself satisfy the R1 private-alpha gate.
 
 ## System boundary
 

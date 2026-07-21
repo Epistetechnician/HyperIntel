@@ -97,6 +97,20 @@ These local extensions create no provenance claim over runtime observations,
 provider operations, buyer authentication, durable state, independent formal
 correspondence, external settlement, or production authority.
 
+## Local R1 extension lineage
+
+- `dbfbd48` adds the inference-native authenticated execution receipt tracer:
+  caller-trusted buyer-policy signatures, non-authoritative admission bound to
+  a reconstructed selected route and replay transition, configured
+  provider-receipt-key signatures over completed execution and usage, and
+  metering reconstruction from the verified receipt. The implementation
+  consulted only the pinned HyperAI patterns named above and copied no outcome,
+  HTTP, operator-header, development-authority, or persistence code.
+
+This tracer has no provider runtime, request-release authority, durable replay
+consume, transport, secrets, cancellation, retry, settlement submission,
+custody, funds, or production authority.
+
 ## Licensing boundary
 
 Neither source checkout exposed a root license file during the migration audit.

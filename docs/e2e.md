@@ -26,6 +26,10 @@ Implemented now:
   authentication without changing the legacy profiles;
 - a deterministic replay transition over the exact caller-supplied buyer state
   for both selected and denied evaluations;
+- caller-trusted authentication of an exact buyer policy, a non-authoritative
+  admission bound to a reconstructed selected route and replay transition, a
+  configured provider-receipt-key signature over one completed execution, and
+  metering reconstruction from that signed receipt;
 - committed V1–V4 fixtures exercised through the compiled CLI process,
   including caller-trust and fail-closed boundary cases; and
 - a source-hash-bound Z3 4.15.0 two-candidate policy-non-widening check whose
@@ -35,9 +39,9 @@ Still absent: verification of the underlying reliability source observations,
 current or durably consumed replay state, atomic compare-and-swap, rollback and
 concurrent-writer protection, provider or gateway runtime, network transport,
 persistence, contracts, custody, funds, external settlement, independent
-reproduction, and production authority. The next authorized tracer is a
+reproduction, and production authority. The implemented first R1 tracer is a
 pure-data buyer-policy signature, selected-route admission, and provider-signed
-completed-execution receipt that can reconstruct metering without granting
+completed-execution receipt that reconstructs metering without granting
 execution authority. Cancellation, retry, partial-output economics, durable
 admission, and external settlement remain outside that slice. V1, V2, and V3
 are retained for compatibility, keep their narrower explicit nonclaims and
@@ -692,12 +696,12 @@ streaming, cancellation, health and failover, signed execution and metering
 receipts, tenant isolation, receipt reconciliation, fault injection, and a
 synthetic no-funds soak.
 
-The first R1 tracer is narrower: caller-trusted buyer-policy authentication,
-admission bound to a reconstructed selected route from V4-grade signed-offer,
-assurance, reliability, and replay inputs, a caller-trusted
-provider receipt-key signature over one completed execution, and metering
-reconstruction from that receipt. It remains pure data and does not satisfy the
-private-alpha gate by itself.
+The implemented first R1 tracer at `dbfbd48` is narrower: caller-trusted
+buyer-policy authentication, admission bound to a reconstructed selected route
+from V4-grade signed-offer, assurance, reliability, and replay inputs, a
+caller-trusted provider receipt-key signature over one completed execution,
+and metering reconstruction from that receipt. It remains pure data and does
+not satisfy the private-alpha gate by itself.
 
 ## 19. First 12 weeks
 

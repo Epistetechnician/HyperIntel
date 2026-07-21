@@ -96,6 +96,20 @@ state, OpenAI-compatible streaming and cancellation through two provider
 agents, receipt reconciliation, tenant isolation, fault injection, and a
 synthetic no-funds soak.
 
+## R1 status
+
+The pure-data authenticated execution receipt tracer is **Implemented** at
+`dbfbd48` and locally checked by its contract coverage and the full repository
+gate. It verifies caller-trusted buyer-policy signatures, reconstructs one
+selected route and replay transition, verifies the configured provider receipt
+key over a completed execution receipt, and reconstructs metering from that
+receipt. Every emitted admission and receipt has `authority_granted = false`.
+
+R1 remains open. No durable atomic replay, request release, gateway or provider
+transport, streaming, cancellation, retry, tenant isolation, reconciliation
+runtime, fault-injection campaign, two-provider operation, incident runbook, or
+synthetic no-funds soak has been implemented or exercised.
+
 ## Change control
 
 Every mutation names a state slice. Schema changes require compatibility and

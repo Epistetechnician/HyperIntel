@@ -18,6 +18,9 @@ The current repository implements a **local pure-data foundation only**:
 - assurance envelopes with explicit assumptions, exclusions, maturity, and
   trust roots;
 - deterministic route, usage, settlement, and evidence identities;
+- caller-trusted buyer-policy authentication, non-authoritative selected-route
+  admission, provider-receipt-key authentication of completed execution, and
+  metering reconstruction from the signed receipt;
 - an offline-verifiable V1–V4 fixture corpus exercised through the real CLI
   process; and
 - a source-hash-bound, two-candidate Z3 policy-non-widening check.
@@ -59,8 +62,10 @@ Exact source mappings and exclusions are recorded in
   and generic assurance evidence sets.
 - `hyperintel-market`: signed-offer admission, eligibility, routing, receipts,
   typed reliability-artifact verification, portable full route evaluations,
-  pure-data replay transitions, metering, deterministic settlement intent, and
-  portable V1/V2/V3/V4 market evidence bundles.
+  pure-data replay transitions, authenticated but non-authoritative execution
+  admissions, provider-signed completed-execution receipts, metering,
+  deterministic settlement intent, and portable V1/V2/V3/V4 market evidence
+  bundles.
 - `hyperintel-cli`: offline JSON bundle verifier; its only external effect is
   reading caller-selected evidence and trusted-key files and writing the verdict
   to stdout. It dispatches only explicit V1/V2/V3/V4 bundle schema identifiers.
