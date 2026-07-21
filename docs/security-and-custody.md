@@ -1,0 +1,85 @@
+# Security, privacy, and custody contract
+
+## Protected assets
+
+- prompts, outputs, embeddings, tool calls, and customer metadata;
+- provider credentials, model weights, capacity schedules, and private offers;
+- buyer authorizations, settlement keys, provider signing keys, and bond funds;
+- service manifests, evidence, revocation state, receipts, and audit history;
+- route integrity, availability, and deterministic replay.
+
+## Trust boundaries
+
+| Boundary | Required control |
+|---|---|
+| Buyer to gateway | Tenant authentication, request policy signature, maximum authorization, replay protection |
+| Router to provider | Mutual authentication, encrypted direct transport, route binding, deadline and cancellation |
+| Provider execution | Isolated workload, scoped credentials, signed metering, declared assurance and limitations |
+| Evidence verifier | Pinned policy and keys, freshness, revocation, content digests, fail-closed unsupported cases |
+| Operator to HyperEVM | Restricted submitter role, no authority to raise cap or change destinations |
+| Contract upgrade | Multisig, timelock, bytecode provenance, pause and buyer escape |
+
+## Custody posture
+
+The target design avoids custody of provider API credentials and minimizes
+custody of buyer funds:
+
+- provider connections terminate at provider-controlled agents;
+- buyer-owned credentials stay in buyer-controlled direct mode;
+- the router receives opaque route/session references, not reusable secrets;
+- buyer funds reside in explicit onchain session escrow with caps and expiry;
+- company treasury, fee revenue, provider bonds, and buyer escrow remain
+  segregated;
+- operators can relay authorized settlement but cannot rewrite it.
+
+Before production, counsel must classify the actual payment, escrow, routing,
+fee, bond, data, sanctions, export-control, consumer, and derivatives activities
+for each launch jurisdiction. Architecture does not substitute for legal
+authorization.
+
+## Privacy rules
+
+- Never put prompt, output, credential, raw private evidence, or stable customer
+  identifiers onchain.
+- Commit only domain-separated digests with a documented retention and deletion
+  policy for the corresponding offchain content.
+- Default logs to structural metadata; payload logging requires tenant policy.
+- Encrypt in transit and at rest with tenant-scoped keys and explicit rotation.
+- Make retention duration and evidence classification part of service policy.
+- A digest may still be personal or sensitive metadata when linkable; do not
+  describe hashing as anonymization.
+
+## Key lifecycle
+
+Every signing or verification key has a purpose, owner, activation time,
+expiration, revocation state, and allowed statement domains. Provider receipt,
+buyer authorization, assurance verifier, contract upgrade, pause, deployer, and
+treasury keys remain distinct. Rotation and compromised-key recovery must be
+tested before funds are enabled.
+
+## Failure policy
+
+- Unknown or expired policy: deny.
+- Missing or stale assurance: deny or route only to a separately declared lower
+  assurance tier; never silently downgrade.
+- Provider disconnect before completion: stop billing at verified usage and
+  execute the declared failover policy.
+- Metering disagreement: withhold disputed delta, preserve evidence, and apply
+  the bounded dispute contract.
+- Chain or RPC unavailability: inference may continue only within a buyer's
+  still-valid offchain authorization and operator exposure cap; settlement
+  queues without changing intent.
+- Verifier disagreement: block stronger assurance promotion.
+- Upgrade or key compromise: pause new exposure while preserving buyer refunds
+  and escape.
+
+## Required pre-production reviews
+
+- independent application and protocol threat model;
+- cryptography and canonicalization review;
+- smart-contract audit plus invariant and differential testing;
+- infrastructure, IAM, tenant-isolation, privacy, and incident-response review;
+- economic manipulation and provider-collusion analysis;
+- legal and regulatory analysis for the exact jurisdictions and asset;
+- rehearsed key compromise, provider default, RPC outage, contract pause,
+  refund, and migration exercises.
