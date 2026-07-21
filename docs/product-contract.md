@@ -61,6 +61,13 @@ compare-and-swap. Neither changes V4 bytes or causes a bundle verifier to read
 external state. The local store grants no prompt-release authority and makes no
 rollback-resistance, replication, tenant-isolation, or production claim.
 
+The separate `hyperintel-execution` harness accepts only a text-only streaming
+request whose exact digest equals the authenticated prompt commitment. It
+preflights the selected provider and receipt signer, consumes the admission's
+transition once, and only then invokes the injected in-process provider. An
+exact retry is not re-executed. Provider substitution and a cancellation
+already effective at consumption time leave the durable nonce untouched.
+
 Every V4 bundle must carry these exact required nonclaim identifiers:
 
 ```text
@@ -75,6 +82,24 @@ no-hyperevm-contract-claim
 no-independent-reproduction
 no-production-readiness
 ```
+
+## Local execution contract
+
+The implemented harness is a hermetic compatibility subset, not a gateway. It
+emits OpenAI-shaped streaming chunks for one assistant choice and handles
+deterministic cancellation and deadline boundaries. A completed path requires
+a valid selected-provider plan, a configured provider receipt signature, exact
+receipt reconstruction, and metering reconstruction before deriving the
+existing non-authoritative settlement intent.
+
+Cancelled, late, provider-failed, or receipt-signer-failed attempts contain no
+metering receipt or settlement intent. Automatic failover is intentionally
+absent. Because the admission commits one selected provider and offer, reroute
+requires a new policy decision and next-nonce authenticated admission.
+
+The harness has no HTTP server, socket, ambient credential, external provider,
+live cancellation propagation, wallet, settlement submission, custody, funds,
+or production authority.
 
 ## Settlement contract
 

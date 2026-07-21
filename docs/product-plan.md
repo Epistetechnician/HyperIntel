@@ -98,6 +98,22 @@ concurrent nonce-consumption gap, but it does not authorize request release or
 establish rollback resistance, remote replication, tenant isolation, backup
 and recovery operations, or production database readiness.
 
+The hermetic execution harness at `4c4b17f` closes the next local dependency.
+It binds a text-only streaming request to the policy prompt digest, verifies
+the selected provider and configured receipt signer, consumes the admission
+once, and invokes an injected in-process provider. The local contracts execute
+both alpha and beta providers and cover exact-retry suppression, provider
+substitution, cancellation, deadline, provider failure, signer failure, signed
+completion, metering, and settlement-intent derivation. Incomplete attempts
+cannot create metering or settlement artifacts.
+
+This is a deterministic no-network exercise, not the private alpha. It has no
+HTTP gateway, encrypted transport, external provider adapter, live stream or
+cancellation propagation, provider health, safe reroute, tenant isolation,
+credential operations, production persistence, funds, or settlement adapter.
+The admission binds one provider; failover must route and authenticate a new
+next-nonce admission rather than substitute providers under the old admission.
+
 ## System boundary
 
 The marketplace is split so no component receives authority merely because it

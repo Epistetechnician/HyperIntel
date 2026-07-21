@@ -6,8 +6,9 @@ This document is the end-to-end target architecture, not a completion claim.
 The current repository completes the documented local, pure-data R0
 implementation target. Its protocol fixtures are hermetic; its separate formal
 process gate is environment-pinned to Z3 4.15.0. Its R1 work is limited to
-authenticated records and a local replay database; it has no gateway/provider
-runtime or external authority.
+authenticated records, a local replay database, and one hermetic in-process
+execution harness; it has no HTTP gateway, external provider runtime, or
+external authority.
 
 Implemented now:
 
@@ -34,6 +35,12 @@ Implemented now:
 - a local SQLite replay store that verifies that authenticated admission,
   serializes writers, atomically advances the exact before-state, retains an
   immutable consumption record, and makes exact retry idempotent;
+- a text-only OpenAI-shaped request and streaming-chunk subset that checks the
+  exact prompt commitment, consumes one new admission before invoking only the
+  selected injected provider, rejects exact retry without re-execution,
+  applies deterministic cancellation and deadline boundaries, verifies a
+  configured provider receipt signature, reconstructs metering, and derives a
+  non-authoritative settlement intent;
 - committed V1–V4 fixtures exercised through the compiled CLI process,
   including caller-trust and fail-closed boundary cases; and
 - a source-hash-bound Z3 4.15.0 two-candidate policy-non-widening check whose
@@ -41,15 +48,19 @@ Implemented now:
 
 Still absent: verification of the underlying reliability source observations,
 rollback-resistant or independently anchored replay state, remote replication,
-tenant isolation, production backup and database operations, provider or
-gateway runtime, network transport, execution-session persistence, contracts,
+tenant isolation, production backup and database operations, HTTP gateway,
+external provider runtime, network transport, live streaming or cancellation,
+health and authenticated reroute, execution-session persistence, contracts,
 custody, funds, external settlement, independent reproduction, and production
 authority. The implemented first R1 tracer is a
 pure-data buyer-policy signature, selected-route admission, and provider-signed
 completed-execution receipt that reconstructs metering without granting
-execution authority. Cancellation, retry, partial-output economics, durable
-execution-session admission, and external settlement remain outside that
-slice. V1, V2, and V3
+execution authority. The separate local harness adds deterministic in-process
+request release and partial-stream evidence only after a new durable consume;
+it adds no external execution or settlement authority. Partial-output
+economics, live cancellation, authenticated reroute, execution-session
+persistence, and external settlement remain outside the implemented slices.
+V1, V2, and V3
 are retained for compatibility, keep their narrower explicit nonclaims and
 historical collapsed assurance-rejection profile, and are covered by exact
 rejection/fallback report and bundle commitments.
@@ -335,6 +346,29 @@ before-state, advances to the deterministic after-state, and inserts one
 immutable consumption record. It prevents concurrent reuse inside that
 database, but not rollback by restoring an older database artifact, and it
 does not release a prompt or contact a provider.
+
+The hermetic R1 harness at `4c4b17f` supplies the next local step. It accepts a
+text-only streaming request whose exact digest equals the authenticated prompt
+commitment, verifies that the injected provider and receipt signer match the
+selected provider, and requires `Applied` durable replay consumption before
+invocation. `ExistingIdentical` is rejected, so retry cannot execute the same
+admission twice. Provider substitution and cancellation at or before
+consumption leave the nonce untouched.
+
+The provider returns explicit in-memory text frames, token increments,
+timestamps, and a runtime commitment. Completed execution must produce a
+caller-trusted provider receipt signature before metering and the existing
+non-authoritative settlement intent are reconstructed. Cancellation, deadline,
+provider failure, and signer failure return typed non-completed evidence with
+no metering or settlement artifacts. The contract runs separately selected
+alpha and beta providers without a socket, external credential, wallet, chain,
+fund, or value movement. Its request and chunk fields are a deliberate subset
+of the official [Chat Completions API](https://developers.openai.com/api/reference/resources/chat),
+not a deployed endpoint or full-compatibility claim.
+
+Automatic provider substitution is prohibited. The authenticated admission
+commits one provider and offer, so safe reroute requires a fresh route decision
+and a buyer-authenticated next-nonce admission.
 
 ## 9. Provider lifecycle
 
@@ -722,6 +756,16 @@ exact transition with an atomic SQLite compare-and-swap. Its concurrency and
 restart contract is locally checked. It is neither production persistence nor
 request-release authority and does not satisfy the private-alpha gate by
 itself.
+
+The implemented hermetic execution harness at `4c4b17f` then binds the exact
+text request to the prompt commitment, consumes the admission once, executes
+only the selected injected provider, returns deterministic OpenAI-shaped
+chunks, and reconstructs the signed receipt, metering, and non-authoritative
+settlement intent on completion. It locally exercises alpha and beta plus
+retry, substitution, cancellation, deadline, provider-failure, and
+signer-failure cases. It has no HTTP, external provider, encrypted transport,
+live cancellation, health, reroute, tenant isolation, credentials, funds, or
+production acceptance and does not satisfy the private-alpha gate by itself.
 
 ## 19. First 12 weeks
 

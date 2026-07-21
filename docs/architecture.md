@@ -2,8 +2,9 @@
 
 HyperIntel separates five planes:
 
-1. **Execution**: future provider discovery, encrypted transport, streaming,
-   cancellation, metering, and failover.
+1. **Execution**: a current hermetic selected-provider harness, followed later
+   by provider discovery, encrypted transport, live streaming, cancellation,
+   metering, and failover.
 2. **Market**: signed offers, hard eligibility, equivalent-product comparison,
    and expected-successful-cost routing.
 3. **Assurance**: canonical manifests, signatures, claim envelopes, evidence,
@@ -13,9 +14,10 @@ HyperIntel separates five planes:
 5. **Financial risk**: a future executed-price index and separately gated HIP-3
    hedge, never inference delivery.
 
-The current implementation covers only pure-data portions of planes 1–4. Its
-execution-plane records verify signatures and bindings; they do not run or
-authorize an execution runtime.
+The current implementation covers pure-data portions of planes 1–4 plus one
+in-process execution harness backed by the local replay store. It verifies and
+consumes an admission before invoking an injected scripted provider. It does
+not run or authorize a networked or production execution runtime.
 
 ## First vertical slice
 
@@ -123,6 +125,51 @@ operator authentication, prompt release, or production operation. Replacing
 the database file with an older copy can restore older state unless a future
 independent monotonic anchor detects it.
 
+## Hermetic execution harness
+
+```text
+text-only ChatCompletionRequestV1
+  + AuthenticatedExecutionAdmissionV1
+  + SqliteReplayStoreV1
+  + selected LocalProviderAgentV1
+  + configured ProviderReceiptSignerV1
+  -> exact request/prompt-commitment check
+  -> provider and receipt-key preflight
+  -> newly applied durable replay consumption
+  -> deterministic local stream, deadline, or cancellation result
+  -> completed provider receipt + configured signature verification
+  -> MeteringReceiptV1
+  -> SettlementIntentV1 (authority_granted = false)
+```
+
+`hyperintel-execution` implements this local R1 harness at `4c4b17f`. Its
+request and chunks intentionally cover only text messages, streaming, one
+choice, assistant deltas, and the normal `stop` finish reason from the official
+[Chat Completions API shape](https://developers.openai.com/api/reference/resources/chat).
+It is not an HTTP endpoint or a claim of full API compatibility.
+
+The request digest must exactly equal the buyer policy's prompt commitment.
+The provider and signer must match the route-selected provider and configured
+receipt key before durable state changes. Only `Applied` replay consumption
+invokes the provider; `ExistingIdentical` is rejected, so an exact retry cannot
+execute twice. Provider substitution and cancellation at or before consumption
+leave the nonce untouched.
+
+The injected provider emits explicit timestamps, text frames, token deltas,
+and a runtime commitment. Completed plans are bounded by the policy, service,
+selected offer, and admission deadline before the receipt chain is accepted.
+Cancellation, deadline, provider failure, and signer failure return typed
+non-completed evidence without metering or settlement artifacts. The
+cancellation signal and stream are deterministic in-memory records, not live
+transport controls.
+
+The contract suite exercises independently selected alpha and beta providers,
+exact-retry suppression, provider-substitution rejection, cancellation,
+deadline, provider failure, and signer failure. It uses no socket, HTTP server,
+provider credential, wallet, chain, custody, funds, or value movement. Safe
+automatic reroute is not implemented: admission binds one provider, so a
+different provider requires a newly routed, newly signed, next-nonce admission.
+
 V1, V2, and V3 schemas and reconstruction behavior remain available unchanged,
 with selected-path and rejection/fallback golden commitments enforcing that
 compatibility boundary.
@@ -151,9 +198,12 @@ that a cheaper offer can offset.
   runtime dependency or an authority source.
 - SQLx 0.8.6, SQLite, the local filesystem, and operator path selection for the
   separately scoped durable replay store.
+- Caller-injected local provider and receipt-signer implementations for the
+  hermetic execution harness. Test signers are fixtures, not production key
+  custody or signing authority.
 
-No blockchain, provider, attestation service, or network is in the current
-trusted computing base because none is called.
+No blockchain, external provider, attestation service, or network is in the
+current trusted computing base because none is called.
 
 ## Dependency direction
 
@@ -162,6 +212,9 @@ hyperintel-core <- hyperintel-assurance <- hyperintel-market <- hyperintel-cli
                                                     ^
                                                     |
                                       hyperintel-persistence
+                                                    ^
+                                                    |
+                                        hyperintel-execution
 ```
 
 `AssuranceEvidenceSetV1` is generic and contains no market-derived records.

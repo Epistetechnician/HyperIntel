@@ -136,14 +136,22 @@ recorded under Source A. It copies no HyperAI schema. It has no remote database,
 rollback-resistant anchor, provider runtime, prompt-release authority,
 credential storage, settlement, custody, funds, or production authority.
 
-The next authorized local R1 slice is
-`hyperintel-local-execution-harness-v1`. It is limited to injected in-process
-providers and signers, deterministic OpenAI-shaped text-stream records, one
-durable authenticated replay consume, selected-provider enforcement, and local
-receipt-to-metering-to-settlement-intent reconstruction. Its implementation
-lineage will be recorded only after the slice passes its required gates. The
-authorization itself creates no gateway, provider, network, credential,
-settlement, custody, funds, or production authority.
+- `4c4b17f` adds `hyperintel-local-execution-harness-v1`: a text-only
+  OpenAI-shaped request and stream subset, exact prompt commitment, one newly
+  applied durable replay consumption before provider invocation, strict
+  selected-provider and receipt-key binding, deterministic in-process
+  streaming, cancellation and deadline boundaries, completed receipt
+  verification, metering reconstruction, and derivation of the existing
+  non-authoritative settlement intent. The contract exercises separately
+  selected alpha and beta providers, exact-retry suppression, provider
+  substitution, provider failure, and signer failure without network,
+  credentials, wallets, chain access, custody, funds, or value movement.
+
+The implementation reuses only the pinned generic dependency-injection,
+versioned execution-port, and scripted-runner patterns recorded under Source
+A. Its domain objects and execution semantics are inference-native. It copies
+no outcome request, validator manifest, HTTP route, process/OCI runner,
+operator header, development authority, credential adapter, or source schema.
 
 ## Licensing boundary
 

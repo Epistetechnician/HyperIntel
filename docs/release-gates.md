@@ -81,6 +81,8 @@ No lower state implies a higher one.
 - R0 kernel and CLI sources import no HTTP, wallet, EVM, database, or
   secret-handling runtime. The separately scoped R1 persistence crate imports
   only local SQLx/SQLite and opens no remote database or provider connection.
+  The separately scoped R1 execution crate invokes only injected in-process
+  providers and opens no network or credential source.
 - `pnpm run verify:full` passes on the pinned toolchain.
 
 ## R0 status
@@ -113,12 +115,26 @@ It verifies the authenticated admission, atomically compares and advances the
 exact buyer state, persists one immutable consumption, makes exact retry
 idempotent, and rejects a competing writer as stale.
 
+The hermetic execution harness is **Implemented** at `4c4b17f` and locally
+checked by four direct contracts plus the full repository gate. It binds a
+text-only OpenAI-shaped streaming request to the buyer prompt commitment,
+preflights the selected provider and receipt signer, requires a newly applied
+durable replay consume before provider invocation, and rejects exact retry
+without re-execution. Its completed path verifies the provider receipt,
+reconstructs metering, and derives a non-authoritative settlement intent. Its
+incomplete paths cover deterministic cancellation, deadline, provider failure,
+and signer failure without metering or settlement artifacts. Separate alpha
+and beta selections are exercised with no sockets, credentials, funds, or
+value movement.
+
 R1 remains open. The local store is not rollback-resistant, replicated,
 tenant-isolated, encrypted by this crate, backed up, independently anchored, or
-production operated. No request release, gateway or provider transport,
-streaming, cancellation, retry, receipt-reconciliation runtime, broader fault
-injection, two-provider operation, incident runbook, or synthetic no-funds soak
-has been implemented or exercised.
+production operated. The harness is not an HTTP gateway, external provider
+runtime, encrypted transport, live stream/cancellation implementation, health
+system, or safe failover path. No production IAM, tenant isolation, external
+receipt reconciliation, sustained two-provider traffic, incident runbook,
+synthetic no-funds soak, independent reproduction, or private-alpha operator
+acceptance has been implemented or exercised.
 
 ## Change control
 

@@ -3,7 +3,7 @@
 HyperIntel is the inference-native foundation for a policy-compliant,
 SLA-backed, evidence-carrying inference marketplace.
 
-The current repository implements a **local pure-data foundation only**:
+The current repository implements a **local hermetic foundation only**:
 
 - canonical service, provider, offer, policy, route, metering, settlement, and
   evidence objects;
@@ -24,6 +24,12 @@ The current repository implements a **local pure-data foundation only**:
 - local SQLite replay-state initialization and authenticated admission
   consumption using a serialized, exact state-digest compare-and-swap,
   immutable consumption records, and exact-retry idempotency;
+- a text-only, in-process Chat Completions request and streaming-chunk subset
+  that invokes only the selected injected provider after a new durable replay
+  consume, rejects exact retry without re-execution, enforces deterministic
+  deadline and cancellation boundaries, verifies an injected provider receipt
+  signature, reconstructs metering, and derives a non-authoritative settlement
+  intent;
 - an offline-verifiable V1–V4 fixture corpus exercised through the real CLI
   process; and
 - a source-hash-bound, two-candidate Z3 policy-non-widening check.
@@ -36,15 +42,17 @@ three legacy versions. New local integrations should use V4's additive causal
 rejection profile and supply reliability artifacts separately from both the
 bundle and caller-controlled trust registry.
 
-It does not contain provider networking, prompt transport, credential custody,
-GPU scheduling, wallet signing, EVM contracts, HyperCore actions, mainnet value
-movement, production authentication, rollback-resistant or remotely replicated
-replay enforcement, or proof of model or output correctness. V4's transition
-alone advances only the caller-supplied state carried by the bundle. The
-separate local SQLite store verifies an authenticated admission and atomically
-consumes that exact transition, but grants no prompt-release authority and does
-not prevent an operator from restoring an older database artifact. Reliability
-verification does not prove that source
+It does not contain an HTTP gateway, provider networking, external prompt
+transport, ambient provider credentials, GPU scheduling, wallet signing, EVM
+contracts, HyperCore actions, mainnet value movement, production
+authentication, rollback-resistant or remotely replicated replay enforcement,
+or proof of model or output correctness. V4's transition alone advances only
+the caller-supplied state carried by the bundle. The separate local SQLite
+store verifies an authenticated admission and atomically consumes that exact
+transition. The local execution harness can then release the request only to
+the selected injected in-process provider; it grants no external request or
+provider authority and does not prevent an operator from restoring an older
+database artifact. Reliability verification does not prove that source
 observations are true, representative, independently reproduced, calibrated,
 stationary, or predictive of future provider performance.
 
@@ -75,6 +83,12 @@ Exact source mappings and exclusions are recorded in
   state registration, authenticated admission verification, serialized atomic
   compare-and-swap, immutable replay-consumption records, validated reads, and
   restart coverage. It opens no remote database or provider connection.
+- `hyperintel-execution`: text-only OpenAI-shaped request and stream records,
+  exact prompt commitment, one-shot durable admission consumption,
+  selected-provider binding, deterministic local deadlines and cancellation,
+  injected provider and receipt-signer ports, completed receipt verification,
+  metering reconstruction, and non-authoritative settlement-intent derivation.
+  It opens no socket and reads no credential or environment secret.
 - `hyperintel-cli`: offline JSON bundle verifier; its only external effect is
   reading caller-selected evidence and trusted-key files and writing the verdict
   to stdout. It dispatches only explicit V1/V2/V3/V4 bundle schema identifiers.

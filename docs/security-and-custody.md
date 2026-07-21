@@ -26,6 +26,20 @@ tenant-isolated, independently anchored, or protected against restoration of
 an older file. It stores no prompt, response, provider credential, wallet key,
 or settlement authorization.
 
+The current execution harness invokes only an injected in-process provider
+after exact request commitment, selected-provider, receipt-key, buyer
+authentication, and newly applied replay-consumption checks. Exact retry is
+not executed again. Provider substitution and already-effective cancellation
+fail before nonce consumption. Deterministic cancellation, deadline, provider
+failure, and signer failure cannot create metering or settlement artifacts.
+
+The harness keeps request and response text in process and returns response
+chunks to its caller; it does not persist those bodies. This is not a
+confidentiality, secure erasure, tenant isolation, or no-retention proof. The
+test receipt keys are fixtures, not an approved key-management boundary. No
+HTTP, TLS, external provider, ambient credential, live cancellation, wallet,
+chain, funds, or production authority is present.
+
 ## Custody posture
 
 The target design avoids custody of provider API credentials and minimizes
@@ -69,8 +83,9 @@ tested before funds are enabled.
 - Unknown or expired policy: deny.
 - Missing or stale assurance: deny or route only to a separately declared lower
   assurance tier; never silently downgrade.
-- Provider disconnect before completion: stop billing at verified usage and
-  execute the declared failover policy.
+- Provider disconnect before completion: stop billing at verified usage. A
+  future declared failover policy must create a newly routed, next-nonce
+  admission; it cannot substitute a provider under the old admission.
 - Metering disagreement: withhold disputed delta, preserve evidence, and apply
   the bounded dispute contract.
 - Chain or RPC unavailability: inference may continue only within a buyer's

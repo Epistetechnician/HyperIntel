@@ -34,9 +34,18 @@ provider, or settlement authority.
 The separate R1 execution tracer verifies caller-trusted buyer-policy and
 provider-receipt signatures. The local SQLite replay store verifies the
 authenticated admission, serializes concurrent writers, atomically advances
-the exact before-state, and retains an immutable consumption record. These are
-implemented local authentication and persistence claims. They grant no prompt
-release, provider call, settlement, custody, or production authority.
+the exact before-state, and retains an immutable consumption record.
+
+The hermetic R1 execution harness then verifies an exact text-only
+Chat Completions request commitment, consumes one new admission, and invokes
+only the route-selected injected provider. Its local contracts exercise two
+provider identities, deterministic streaming, cancellation, deadlines,
+provider failure, signer failure, signed completion, metering reconstruction,
+and a non-authoritative settlement intent. Exact retries do not execute again,
+and provider substitution is rejected before replay consumption. These are
+implemented local authentication, persistence, and in-process execution
+claims. They grant no HTTP, external provider, credential, chain, settlement,
+custody, funds, or production authority.
 
 ## Unsupported claims
 
@@ -53,8 +62,12 @@ The repository does not establish:
 - production authentication or rollback-resistant, remotely replicated,
   tenant-isolated, independently anchored, or externally enforced replay
   state; V4 alone advances only caller-supplied pure data, while the separate
-  R1 SQLite store provides local authenticated atomic consumption without
-  prompt-release authority;
+  R1 SQLite store provides local authenticated atomic consumption; the local
+  harness releases a request only to an injected selected provider and grants
+  no external prompt-release authority;
+- full OpenAI API compatibility, an HTTP gateway, external provider transport,
+  live cancellation propagation, automatic failover, provider health, or
+  production provider-agent operation;
 - truth, completeness, representative sampling, independence, or provenance of
   the source observations committed by a V3 reliability artifact;
 - calibration, stationarity, causal validity, or future predictive accuracy of
