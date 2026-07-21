@@ -12,17 +12,18 @@ production safety.
 - Process test: `crates/hyperintel-market/tests/formal_policy.rs`
 - Bound implementation source: `crates/hyperintel-market/src/routing.rs`
 - Bound source SHA-256:
-  `814c8d8bd5ee42b0ba1d7c97533f475aac8d8c84bab611163115af02efc6acbe`
+  `a0ea4bc9129b509692ac3d4b55e215ba3514056cb09c270cdbaf95142d1bb425`
 - Repository resolver: `tools/pinned-z3`
 - Required local solver output for `z3 --version`:
   `Z3 version 4.15.0 - 64 bit`
 - Expected solver verdicts, in order: `unsat`, then `sat`
 
 The model was added at `661cdc3`; the repository-controlled exact-version
-resolver and corrected source binding were added at `9703256`. The model is
-HyperIntel-specific and handwritten; no source-repository domain or
-formal-model code was copied. The work reuses only the pinned-source process
-and conservative claim discipline recorded in [`provenance.md`](provenance.md).
+resolver and corrected source binding were added at `9703256`, and the source
+binding was advanced with the compatibility correction at `6887ac1`. The model
+is HyperIntel-specific and handwritten; no source-repository domain or formal-model
+code was copied. The work reuses only the pinned-source process and conservative
+claim discipline recorded in [`provenance.md`](provenance.md).
 
 ## Property
 

@@ -17,7 +17,10 @@ candidate and reconstructs either a selected route or a deterministic
 all-rejected outcome. It binds both outcomes to a pure-data transition from the
 exact caller-supplied buyer replay state to its deterministic successor.
 Selected outcomes require metering and settlement records; denied outcomes
-prohibit them. V1, V2, and V3 remain compatible under their existing nonclaims.
+prohibit them. V4's evaluation profile distinguishes invalid assurance
+evidence, policy rejection, and invalid offer authentication. V1, V2, and V3
+remain compatible under their existing nonclaims and historical collapsed
+assurance-rejection profile.
 
 The formal contract test is an offline, environment-pinned local gate. With the
 exact prerequisite `Z3 version 4.15.0 - 64 bit`, `tools/pinned-z3` checks the

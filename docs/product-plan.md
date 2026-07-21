@@ -75,10 +75,12 @@ buyer policy + maximum authorization
 The current R0 slice ends at a non-authoritative settlement intent. Its V2 path
 verifies capacity-offer signatures against caller-supplied trust. Its additive
 V3 path also verifies verifier-signed typed reliability identity, bindings,
-validity, and exact historical count arithmetic. V1 and V2 remain compatible
-under narrower explicit nonclaims. R0 does not verify the underlying
-observation truth, provider/buyer execution-receipt signatures, live
-consumed-nonce state, bonds, SLA credits, chain commitments, or value movement.
+validity, and exact historical count arithmetic. The additive V4 path retains
+complete causal rejection records and a pure-data replay transition. V1, V2,
+and V3 retain their historical collapsed rejection semantics and narrower
+explicit nonclaims. R0 does not verify the underlying observation truth,
+provider/buyer execution-receipt signatures, live consumed-nonce state, bonds,
+SLA credits, chain commitments, or value movement.
 
 ## System boundary
 

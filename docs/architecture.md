@@ -60,7 +60,11 @@ V2 remain compatible under their narrower explicit nonclaims.
 cost decomposition. Its outcome is either a selected `RouteDecisionV1` or
 `NoEligibleOffer`. V4 therefore reconstructs both fills and complete denials;
 metering and settlement records must both be present for a selection and both
-absent for a denial.
+absent for a denial. V4 uses an additive causal-rejection profile that
+distinguishes invalid assurance evidence, valid evidence rejected by policy,
+and invalid offer authentication. The V1, V2, and V3 selectors retain their
+historical collapsed rejection profile so their eligibility-report, route, and
+bundle commitments do not change.
 
 `BuyerReplayStateV1` and `ReplayStateTransitionV1` bind the buyer, exact next
 nonce, policy, evaluation digest, evaluation time, and before/after state. The
@@ -69,7 +73,9 @@ evaluations. It does not authenticate the buyer or establish currentness,
 durable storage, atomic consumption, concurrency control, rollback resistance,
 or external enforcement.
 
-V1, V2, and V3 schemas and reconstruction behavior remain available unchanged.
+V1, V2, and V3 schemas and reconstruction behavior remain available unchanged,
+with selected-path and rejection/fallback golden commitments enforcing that
+compatibility boundary.
 
 Assurance requirements are hard gates. They are never converted into a scalar
 that a cheaper offer can offset.

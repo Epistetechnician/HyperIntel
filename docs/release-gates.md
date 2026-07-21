@@ -51,8 +51,11 @@ No lower state implies a higher one.
   evaluations. Selected evaluations require metering and settlement records;
   all-rejected evaluations prohibit both.
 - Offer-aware validation rejects a self-digested but suboptimal selected route,
-  and typed failures distinguish invalid assurance evidence, valid evidence
-  rejected by assurance policy, and invalid offer authentication.
+  and V4's causal profile distinguishes invalid assurance evidence, valid
+  evidence rejected by assurance policy, and invalid offer authentication.
+- Frozen V1, V2, and V3 rejection/fallback goldens preserve their historical
+  collapsed assurance-rejection report, route, and bundle commitments while
+  an economically preferred rejected offer falls back to eligible supply.
 - Route-evaluation identity commits to the buyer-supplied replay snapshot and
   either the selected reliability-artifact-qualified offer or the deterministic
   all-rejected result.
@@ -81,7 +84,7 @@ No lower state implies a higher one.
 ## R0 status
 
 The documented R0 implementation scope is complete in the local lineage through
-`9703256`: schemas, canonicalization, deterministic route
+`6887ac1`: schemas, canonicalization, deterministic route
 simulation and reconstruction, V1–V4 offline verification, direct process
 coverage, and one bounded formal property are present. This status means only
 **Implemented** and, when the full gate is rerun at the exact working-tree

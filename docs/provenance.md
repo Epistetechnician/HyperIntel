@@ -75,9 +75,13 @@ Explicitly excluded:
   source-bound process test.
 - `9703256` adds strict offer-aware winner validation, distinct assurance
   evidence/policy/signature rejection records, direct V1–V4 process fixtures,
-  and the repository-controlled exact-version Z3 resolver. The formal test now
-  binds `routing.rs` SHA-256
-  `814c8d8bd5ee42b0ba1d7c97533f475aac8d8c84bab611163115af02efc6acbe`
+  and the repository-controlled exact-version Z3 resolver.
+- `6887ac1` scopes the distinct assurance evidence/policy/signature rejection
+  taxonomy to the additive V4 causal-evaluation profile, restores the legacy
+  collapsed rejection semantics used by V1, V2, and V3, and freezes exact
+  rejection/fallback report and bundle commitments for all three legacy
+  versions. The formal test now binds `routing.rs` SHA-256
+  `a0ea4bc9129b509692ac3d4b55e215ba3514056cb09c270cdbaf95142d1bb425`
   and the expected `unsat` then `sat` verdicts. The resolver accepts only the
   reported version `Z3 version 4.15.0 - 64 bit`; it does not prove solver-binary
   provenance.

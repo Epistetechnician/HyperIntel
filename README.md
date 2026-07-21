@@ -24,9 +24,11 @@ The current repository implements a **local pure-data foundation only**:
 
 The unsigned-offer V1 and signed-offer V2 bundles remain available for schema
 compatibility. V3 also remains byte- and semantic-compatible. Each version
-retains its narrower nonclaims. New local integrations should use V4 and supply
-reliability artifacts separately from both the bundle and caller-controlled
-trust registry.
+retains its narrower nonclaims and historical collapsed assurance-rejection
+profile. Frozen rejection/fallback report and bundle commitments cover all
+three legacy versions. New local integrations should use V4's additive causal
+rejection profile and supply reliability artifacts separately from both the
+bundle and caller-controlled trust registry.
 
 It does not contain provider networking, prompt transport, credential custody,
 GPU scheduling, wallet signing, EVM contracts, HyperCore actions, mainnet value

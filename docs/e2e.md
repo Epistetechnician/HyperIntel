@@ -21,7 +21,9 @@ Implemented now:
   V1/V2/V3 reconstruction, and offline verification;
 - additive V4 reconstruction with one full typed eligibility report per
   candidate, selected-or-all-rejected outcomes, and optional fill artifacts
-  whose presence must match the outcome;
+  whose presence must match the outcome; its causal profile distinguishes
+  invalid assurance evidence, policy rejection, and invalid offer
+  authentication without changing the legacy profiles;
 - a deterministic replay transition over the exact caller-supplied buyer state
   for both selected and denied evaluations;
 - committed V1–V4 fixtures exercised through the compiled CLI process,
@@ -35,7 +37,9 @@ compare-and-swap, rollback and concurrent-writer protection, signed
 execution/metering/settlement receipts, provider or gateway runtime, network
 transport, persistence, contracts, custody, funds, external settlement,
 independent reproduction, and production authority. V1, V2, and V3 are retained
-for compatibility and keep their narrower explicit nonclaims.
+for compatibility, keep their narrower explicit nonclaims and historical
+collapsed assurance-rejection profile, and are covered by exact
+rejection/fallback report and bundle commitments.
 
 Repository mutation authority comes only from [`docs/state-slices.md`](state-slices.md).
 The product-object names below do not authorize implementation or external
@@ -297,7 +301,11 @@ Each `RouteDecisionV1` binds:
 `EligibilityReportV1` bodies, including typed failures and available cost, for
 every candidate. It binds either the selected decision or a deterministic
 `NoEligibleOffer` outcome. V4 reconstructs that full record from signed offers,
-assurance evidence, reliability artifacts, and caller-controlled trust.
+assurance evidence, reliability artifacts, and caller-controlled trust. Its
+causal evaluation profile reports invalid assurance evidence separately from
+policy rejection and invalid offer authentication. Legacy V1, V2, and V3
+selectors deliberately retain the earlier collapsed rejection profile and its
+wire commitments.
 
 `ReplayStateTransitionV1` then binds the evaluation digest to the buyer's exact
 policy, replay snapshot, next nonce, validity window, and deterministic
@@ -509,7 +517,7 @@ weakened selector ignores eligibility and selects the cheaper ineligible
 candidate.
 
 The contract test pins the SHA-256 digest
-`814c8d8bd5ee42b0ba1d7c97533f475aac8d8c84bab611163115af02efc6acbe`
+`a0ea4bc9129b509692ac3d4b55e215ba3514056cb09c270cdbaf95142d1bb425`
 for `crates/hyperintel-market/src/routing.rs`, the exact Z3 version string, and
 the expected `unsat`/`sat` output. Source drift fails the test, but the SMT
 model remains handwritten. It does not establish semantic correspondence to
@@ -668,7 +676,7 @@ Avoid competing first for casual consumer prompts. The buyer must value reliabil
 | R6 — Optional HIP-3 hedge    | HIP-3 hedge                                                             | Testnet then separately approved mainnet perpetual                          | 500,000 HYPE approval; oracle operations; legal review; market makers; basis-risk limits |
 
 The R0 implementation checklist is complete in the local lineage through
-`9703256`. “Complete” is scoped to implemented local code and,
+`6887ac1`. “Complete” is scoped to implemented local code and,
 when the exact full gate passes, locally checked evidence. It does not mean
 independently reproduced, private-alpha ready, production authorized, or able
 to execute inference or move value. The V4 replay transition consumes no
