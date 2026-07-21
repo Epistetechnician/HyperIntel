@@ -53,6 +53,19 @@ provider receipt. This slice is pure data. It authorizes no socket, provider
 call, prompt transport, credential storage, persistent replay state,
 cancellation runtime, retry, settlement submission, or value movement.
 
+## `hyperintel-durable-replay-store-v1`
+
+`crates/hyperintel-persistence/**`, its workspace membership and exact
+dependency pins in `Cargo.toml` and `Cargo.lock`, and durable-replay contract
+coverage: local SQLite schema initialization, exact initial buyer-state
+registration, caller-trusted authenticated-admission verification, and an
+atomic compare-and-swap from the admission's before-state to after-state with
+immutable consumption records and exact-retry idempotency. The state slice may
+open only an operator-selected local filesystem path or an in-memory test
+database. It authorizes no remote database, socket, prompt release, provider
+call, credential storage, request body, cancellation, retry, settlement
+submission, custody, or value movement.
+
 ## Reserved future slices
 
 The following names reserve no implementation authority:

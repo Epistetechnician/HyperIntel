@@ -30,6 +30,12 @@ Generalized foundations:
   dependencies consulted for the inference-native authenticated execution
   tracer. No operator role header, HTTP route, outcome record, development
   authority, or persistence adapter is copied.
+- `crates/outcomes-persistence-sqlx/src/lib.rs` -> exact SQLx 0.8.6 and SQLite
+  WAL configuration, busy-timeout, explicit transaction, immutable replay,
+  and fail-closed idempotency patterns consulted for the inference-native
+  durable replay store. Only the pinned dependency versions and generic
+  transaction pattern are reused; no claim, outcome, resolution, market,
+  dispute, settlement, event, outbox, or authorization-denial schema is copied.
 
 Explicitly excluded:
 
