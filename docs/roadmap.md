@@ -4,9 +4,10 @@
 
 Implemented local target: canonical domain objects, assurance envelopes,
 provider-key signed-offer admission, routing, receipts, settlement intent,
-portable V1/V2 evidence, CLI verification, and hermetic tests. Remaining R0
-work includes typed reliability-artifact verification, a hermetic replay-state
-transition, fuller route rejection records, and direct CLI-process coverage.
+portable V1/V2 evidence, verifier-signed typed reliability artifacts and V3
+evidence, CLI verification, and hermetic tests. Remaining R0 work includes a
+hermetic replay-state transition, fuller route rejection records, and direct
+CLI-process coverage.
 
 ## R1: private execution alpha
 

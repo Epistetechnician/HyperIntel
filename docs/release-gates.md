@@ -38,9 +38,17 @@ No lower state implies a higher one.
 - Verified same-key sequence equivocation blocks the signed batch; unverified
   spoofed sequence fields cannot poison fallback, and rejected claimed keys do
   not become caller-trusted disclosures.
-- Route identity commits to the buyer-supplied replay snapshot and declared
-  reliability inputs. R0 does not enforce consumed nonces or verify that the
-  reliability artifact establishes the declared probability.
+- The additive V3 path verifies the exact reliability artifact referenced by
+  each signed offer: canonical typed identity, caller-trusted verifier
+  signature, provider and service bindings, observation and validity windows,
+  nonzero source and policy commitments, and floor-rounded count-to-PPM
+  equality. Invalid artifacts are candidate-scoped hard failures.
+- Distinct verifier-authenticated reliability artifacts at one signer, key,
+  and logical sequence block the batch; exact artifact reuse is allowed.
+- Route identity commits to the buyer-supplied replay snapshot and selected
+  reliability-artifact-qualified offer. R0 does not enforce consumed nonces or
+  establish that committed reliability observations are true or predict future
+  delivery.
 - Evidence signatures, content bytes, validity, and policy are verified offline
   against trust keys supplied separately from the bundle.
 - Route, metering, settlement, and evidence tampering fails.

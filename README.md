@@ -9,19 +9,26 @@ The current repository implements a **local pure-data foundation only**:
   evidence objects;
 - fail-closed eligibility, including a V2 signed-offer path that verifies the
   exact capacity-offer digest against the provider's configured offer key;
+- an additive V3 path that also verifies caller-supplied, verifier-signed typed
+  reliability artifacts, exact count-to-PPM arithmetic, bindings, and validity;
 - expected-successful-cost routing among economically eligible offers;
 - assurance envelopes with explicit assumptions, exclusions, maturity, and
   trust roots;
 - deterministic route, usage, settlement, and evidence identities;
 - an offline-verifiable end-to-end fixture.
 
-The unsigned-offer V1 bundle remains available only for schema compatibility
-and retains its explicit `no-capacity-offer-signature-verification` nonclaim.
-New local integrations should use the signed-offer V2 bundle.
+The unsigned-offer V1 and signed-offer V2 bundles remain available for schema
+compatibility and retain their respective unsigned-offer and unverified-
+reliability nonclaims. New local integrations that route on declared success
+probability should use V3 and supply reliability artifacts separately from the
+bundle and caller-controlled trust registry.
 
 It does not contain provider networking, prompt transport, credential custody,
 GPU scheduling, wallet signing, EVM contracts, HyperCore actions, mainnet value
 movement, production authentication, or proof of model or output correctness.
+V3 does not prove that source observations are true, representative,
+independently reproduced, calibrated, stationary, or predictive of future
+provider performance.
 
 ## Repository lineage
 
@@ -41,11 +48,11 @@ Exact source mappings and exclusions are recorded in
 - `hyperintel-assurance`: claim-envelope algebra, acceptance policy, signatures,
   and generic assurance evidence sets.
 - `hyperintel-market`: signed-offer admission, eligibility, routing, receipts,
-  metering, deterministic settlement intent, and portable V1/V2 market evidence
-  bundles.
+  typed reliability-artifact verification, metering, deterministic settlement intent,
+  and portable V1/V2/V3 market evidence bundles.
 - `hyperintel-cli`: offline JSON bundle verifier; its only external effect is
   reading caller-selected evidence and trusted-key files and writing the verdict
-  to stdout. It dispatches only explicit V1/V2 bundle schema identifiers.
+  to stdout. It dispatches only explicit V1/V2/V3 bundle schema identifiers.
   Bundle-disclosed keys receive no authority unless they exactly match the
   separate caller-controlled trust registry.
 

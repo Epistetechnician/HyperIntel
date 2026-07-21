@@ -11,14 +11,18 @@ Implemented now:
   and portable evidence records;
 - caller-controlled Ed25519 trust, validity, revocation, and tamper checks;
 - provider-key signed-capacity-offer admission in the additive V2 evidence path;
+- caller-trusted verifier signatures, typed provider/service bindings,
+  observation and validity windows, source and methodology commitments, and
+  exact floor-PPM count arithmetic in the additive V3 reliability path;
 - deterministic expected-successful-cost routing, conservation, idempotency,
-  V1/V2 reconstruction, and offline verification.
+  V1/V2/V3 reconstruction, and offline verification.
 
-Still absent: reliability-artifact verification, consumed replay state, signed
-execution/metering/settlement receipts, provider or gateway runtime, network
-transport, persistence, contracts, custody, funds, external settlement,
-independent reproduction, and production authority. The unsigned V1 bundle is
-retained only for compatibility and keeps its explicit nonclaim.
+Still absent: verification of the underlying reliability source observations,
+consumed replay state, signed execution/metering/settlement receipts, provider
+or gateway runtime, network transport, persistence, contracts, custody, funds,
+external settlement, independent reproduction, and production authority. V1
+and V2 are retained for compatibility and keep their narrower explicit
+nonclaims.
 
 Repository mutation authority comes only from [`docs/state-slices.md`](state-slices.md).
 The product-object names below do not authorize implementation or external

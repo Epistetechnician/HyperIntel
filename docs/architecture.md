@@ -20,14 +20,16 @@ The current implementation covers only pure-data portions of planes 2–4.
 ```text
 ServiceSpecV1 + ProviderIdentityV1 + CapacityOfferV1
   + SignedCapacityOfferV1
+  + SignedReliabilityArtifactV1
   + InferenceRequestPolicyV1 + AssuranceAcceptancePolicyV1
   -> provider-key offer authentication
+  -> verifier-key reliability identity, binding, validity, and arithmetic checks
   -> fail-closed eligibility
   -> expected-successful-cost selection
   -> RouteReceiptV1
   -> MeteringReceiptV1
   -> SettlementIntentV1
-  -> portable MarketEvidenceBundleV1
+  -> portable ReliabilityArtifactVerifiedMarketEvidenceBundleV3
   -> offline verification
 ```
 
@@ -44,6 +46,14 @@ Unverified spoofed sequence fields remain ordinary ineligible offers and cannot
 poison fallback to valid supply. Rejected attacker-claimed keys are retained in
 the signed wrapper for reconstruction but are never promoted into caller trust.
 
+`SignedReliabilityArtifactV1` binds exact observed-success and total counts,
+their floor-PPM result, provider, service, source and observation-policy
+commitments, observation window, and validity to a caller-classified
+`VerifierKey`. Missing, stale, untrusted, tampered, or inconsistent artifacts
+are candidate-scoped hard failures. `ReliabilityArtifactVerifiedMarketEvidenceBundleV3`
+reconstructs this path while artifacts and trust remain separate inputs. V1 and
+V2 remain compatible under their narrower explicit nonclaims.
+
 Assurance requirements are hard gates. They are never converted into a scalar
 that a cheaper offer can offset.
 
@@ -56,6 +66,9 @@ that a cheaper offer can offset.
 - HyperIntel validation and routing code.
 - Caller-controlled provider and verifier key registry, supplied separately
   from the evidence bundle. Bundle-disclosed keys must match it exactly.
+- Key-validity and revocation-aware Ed25519 verification for domain-specific
+  canonical messages. The assurance crate checks cryptography and caller trust;
+  the owning protocol remains responsible for its message schema and bindings.
 - Test fixture declarations.
 
 No blockchain, provider, attestation service, or network is in the current
@@ -68,5 +81,6 @@ hyperintel-core <- hyperintel-assurance <- hyperintel-market <- hyperintel-cli
 ```
 
 `AssuranceEvidenceSetV1` is generic and contains no market-derived records.
-`MarketEvidenceBundleV1` belongs to `hyperintel-market`, where route, metering,
-and settlement objects can be reconstructed without a dependency cycle.
+Market evidence bundles belong to `hyperintel-market`, where reliability,
+route, metering, and settlement objects can be reconstructed without a
+dependency cycle.

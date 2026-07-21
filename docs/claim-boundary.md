@@ -5,9 +5,12 @@
 HyperIntel contains a local, hermetic, pure-data implementation of one scoped
 inference-market decision path. Its tests can show that the implemented fixture
 obeys the named validation, routing, arithmetic, digest, evidence-signature,
-signed-capacity-offer, and deterministic reconstruction rules. The V2 path
-checks offer attribution against caller-supplied trust; it grants no external
-execution or provider authority.
+signed-capacity-offer, typed reliability, and deterministic reconstruction
+rules. The V2 path checks offer attribution against caller-supplied trust. The
+additive V3 path also checks that a caller-trusted verifier signed the exact
+typed reliability artifact and that its provider, service, windows, counts, and
+floor-PPM result match the offer. Neither path grants external execution or
+provider authority.
 
 ## Unsupported claims
 
@@ -23,8 +26,10 @@ The repository does not establish:
   authorization;
 - consumed-nonce or replay-state enforcement beyond committing the buyer's
   supplied snapshot digest;
-- verification that an offer's declared success probability is established by
-  its reliability-evidence digest;
+- truth, completeness, representative sampling, independence, or provenance of
+  the source observations committed by a V3 reliability artifact;
+- calibration, stationarity, causal validity, or future predictive accuracy of
+  the artifact's historical success fraction;
 - buyer-policy compliance assurance; R0 rejects this property because it has no
   policy-digest-bound evidence lane;
 - production authentication, availability, durability, or tenant isolation;

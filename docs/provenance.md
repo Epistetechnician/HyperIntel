@@ -45,7 +45,9 @@ Generalized foundations:
 - `crates/statebook-core/**` -> exact integer/rational discipline, canonical
   identities, semantic separation, and fail-closed validation patterns.
 - `crates/statebook-settlement/src/completeness.rs` -> independent completeness
-  dimensions without an aggregate trust score or authority.
+  dimensions plus bounded, closed, fail-closed validation patterns consulted
+  for the inference-native typed reliability artifact. No Statebook subject,
+  capital, settlement, recovery, or payoff type was copied.
 - `crates/hsai-gateway-digest-checker/**` -> implementation-diverse checking as
   a future verification pattern.
 

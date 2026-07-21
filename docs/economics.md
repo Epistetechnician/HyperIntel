@@ -65,8 +65,11 @@ policy integrations, independently replayable evidence, enterprise workflow,
 and reservation liquidity.
 
 Executed history may influence routing only through a versioned reliability
-snapshot committed into the request policy. No unpublished live database state
-may silently change a historical route decision.
+artifact whose typed identity is committed by the signed offer and whose
+evaluation is reconstructed by the route and evidence bundle. No unpublished
+live database state may silently change a historical route decision. The
+current V3 artifact verifies supplied identity, signature, bindings, validity,
+and arithmetic; it does not establish that the committed observations occurred.
 
 ## Provider and buyer incentives
 
