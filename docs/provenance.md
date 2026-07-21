@@ -192,6 +192,17 @@ report-reconstruction contracts plus the full repository gate pass. The
 authorization creates no claim of independent metering, external observation,
 payment, settlement finality, custody, networking, or production authority.
 
+Queued after receipt reconciliation is
+`hyperintel-runtime-configuration-v1`. It may reuse only the existing canonical
+JSON, strict identifier, digest, serialization, error, and local-file test
+patterns to validate a bounded local-hermetic configuration document and an
+opaque version-pinned secret reference. It may not copy source code or resolve
+secrets, merge ambient configuration, create paths, open databases, bind a
+socket, contact a provider, or add settlement authority. Implementation lineage
+will be recorded only after size, schema, canonical digest, path, collision,
+connection-bound, secret-redaction, no-side-effect, and full repository gates
+pass.
+
 ## Licensing boundary
 
 Neither source checkout exposed a root license file during the migration audit.

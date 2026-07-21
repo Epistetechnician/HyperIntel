@@ -145,6 +145,23 @@ metering observation, database mutation, socket, provider call, credential
 source, payment, settlement submission, custody, funds, or production
 authority.
 
+## `hyperintel-runtime-configuration-v1`
+
+`crates/hyperintel-runtime-config/**`, its workspace membership and exact
+dependency pins in `Cargo.toml` and `Cargo.lock`, the focused-test command in
+`package.json`, `config/examples/local-hermetic.json`, and
+`docs/runtime-configuration.md`: strict loading and validation of one bounded
+JSON runtime-configuration document for a local hermetic profile; canonical
+runtime identity; absolute, distinct local SQLite replay and execution-journal
+paths; bounded connection counts; a domain-separated configuration digest;
+and an opaque, version-pinned secret-reference type for later service-specific
+configuration. The slice may read only one operator-selected local
+configuration file. It authorizes no defaults, environment merge,
+interpolation, hot reload, remote configuration, secret material, secret
+resolution, credential access, directory creation, database opening, socket,
+provider call, wallet, chain, settlement, custody, funds, or production
+authority.
+
 ## Reserved future slices
 
 The following names reserve no implementation authority:
