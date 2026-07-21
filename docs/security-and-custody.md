@@ -19,6 +19,13 @@
 | Operator to HyperEVM | Restricted submitter role, no authority to raise cap or change destinations |
 | Contract upgrade | Multisig, timelock, bytecode provenance, pause and buyer escape |
 
+The current R1 persistence slice covers only a local SQLite replay cursor and
+immutable consumption record. Immediate transactions serialize local writers,
+but the database is not encrypted by HyperIntel, replicated, backed up,
+tenant-isolated, independently anchored, or protected against restoration of
+an older file. It stores no prompt, response, provider credential, wallet key,
+or settlement authorization.
+
 ## Custody posture
 
 The target design avoids custody of provider API credentials and minimizes

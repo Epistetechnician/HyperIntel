@@ -31,6 +31,13 @@ The resolver does not prove solver-binary provenance, and the model is not a
 machine-checked Rust-source proof. No path grants external execution, replay,
 provider, or settlement authority.
 
+The separate R1 execution tracer verifies caller-trusted buyer-policy and
+provider-receipt signatures. The local SQLite replay store verifies the
+authenticated admission, serializes concurrent writers, atomically advances
+the exact before-state, and retains an immutable consumption record. These are
+implemented local authentication and persistence claims. They grant no prompt
+release, provider call, settlement, custody, or production authority.
+
 ## Unsupported claims
 
 The repository does not establish:
@@ -43,9 +50,11 @@ The repository does not establish:
   retains its explicit unsigned-offer nonclaim;
 - production offer-signing authority, key custody, or external provider
   authorization;
-- buyer authentication or current, durable, atomic, rollback-resistant,
-  concurrent, or externally consumed replay state; V4 advances only the exact
-  caller-supplied pure-data cursor;
+- production authentication or rollback-resistant, remotely replicated,
+  tenant-isolated, independently anchored, or externally enforced replay
+  state; V4 alone advances only caller-supplied pure data, while the separate
+  R1 SQLite store provides local authenticated atomic consumption without
+  prompt-release authority;
 - truth, completeness, representative sampling, independence, or provenance of
   the source observations committed by a V3 reliability artifact;
 - calibration, stationarity, causal validity, or future predictive accuracy of

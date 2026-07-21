@@ -22,8 +22,8 @@ funds, or production use.
 ## R1: private execution alpha
 
 Future state slices: provider agent, OpenAI-compatible gateway, streaming,
-cancellation, passive health, direct-provider mode, durable persistence, and
-production IAM. No chain dependency.
+cancellation, passive health, direct-provider mode, production persistence,
+and production IAM. No chain dependency.
 
 The next MVP tranche is authenticated buyer admission, durable atomic replay,
 two provider agents, request deadlines, streaming and cancellation, health and
@@ -35,9 +35,16 @@ caller-trusted `BuyerPolicy` key, bind a non-authoritative admission to a fully
 reconstructed selected route from V4-grade signed-offer, assurance,
 reliability, and replay inputs, verify one completed execution under the
 selected provider's configured receipt key, and reconstruct metering from that
-signed receipt. This landed at `dbfbd48`. Gateway/provider sockets, durable
-atomic replay, persistence, cancellation, retry, tenant isolation, and
-external effects remain separately gated; R1 is not complete.
+signed receipt. This landed at `dbfbd48`.
+
+The local durable replay store landed at `f5d3eff`: SQLite schema checksum,
+exact initial state, authenticated admission verification, serialized atomic
+compare-and-swap, immutable consumption, exact-retry idempotency, competing
+writer rejection, and close/reopen coverage. It has no prompt-release
+authority and no rollback resistance, replication, production backup policy,
+tenant isolation, or production database operations. Gateway/provider sockets,
+cancellation, retry, and external effects remain separately gated; R1 is not
+complete.
 
 ## R2: HyperEVM testnet
 

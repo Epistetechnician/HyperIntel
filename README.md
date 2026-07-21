@@ -21,6 +21,9 @@ The current repository implements a **local pure-data foundation only**:
 - caller-trusted buyer-policy authentication, non-authoritative selected-route
   admission, provider-receipt-key authentication of completed execution, and
   metering reconstruction from the signed receipt;
+- local SQLite replay-state initialization and authenticated admission
+  consumption using a serialized, exact state-digest compare-and-swap,
+  immutable consumption records, and exact-retry idempotency;
 - an offline-verifiable V1–V4 fixture corpus exercised through the real CLI
   process; and
 - a source-hash-bound, two-candidate Z3 policy-non-widening check.
@@ -35,11 +38,13 @@ bundle and caller-controlled trust registry.
 
 It does not contain provider networking, prompt transport, credential custody,
 GPU scheduling, wallet signing, EVM contracts, HyperCore actions, mainnet value
-movement, production authentication, durable or atomic replay enforcement, or
-proof of model or output correctness. V4's transition advances only the
-caller-supplied state carried by the bundle. It does not prove that state is
-current, persisted, rollback-resistant, buyer-authenticated, or consumed by an
-external system. Reliability verification does not prove that source
+movement, production authentication, rollback-resistant or remotely replicated
+replay enforcement, or proof of model or output correctness. V4's transition
+alone advances only the caller-supplied state carried by the bundle. The
+separate local SQLite store verifies an authenticated admission and atomically
+consumes that exact transition, but grants no prompt-release authority and does
+not prevent an operator from restoring an older database artifact. Reliability
+verification does not prove that source
 observations are true, representative, independently reproduced, calibrated,
 stationary, or predictive of future provider performance.
 
@@ -66,6 +71,10 @@ Exact source mappings and exclusions are recorded in
   admissions, provider-signed completed-execution receipts, metering,
   deterministic settlement intent, and portable V1/V2/V3/V4 market evidence
   bundles.
+- `hyperintel-persistence`: local SQLite schema checksum, exact initial replay
+  state registration, authenticated admission verification, serialized atomic
+  compare-and-swap, immutable replay-consumption records, validated reads, and
+  restart coverage. It opens no remote database or provider connection.
 - `hyperintel-cli`: offline JSON bundle verifier; its only external effect is
   reading caller-selected evidence and trusted-key files and writing the verdict
   to stdout. It dispatches only explicit V1/V2/V3/V4 bundle schema identifiers.

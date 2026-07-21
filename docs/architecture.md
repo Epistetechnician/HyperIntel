@@ -101,6 +101,28 @@ There is no request release, socket, prompt transport, durable nonce consume,
 cancellation, retry, partial-output accounting, persistence, provider call,
 settlement submission, custody, or value movement.
 
+## Durable replay store
+
+`hyperintel-persistence` implements the next local R1 dependency at `f5d3eff`.
+It validates the full authenticated admission before opening an immediate
+SQLite transaction. The transaction first resolves an exact immutable retry;
+otherwise it updates the buyer cursor only when the stored buyer, state digest,
+nonce, and canonical payload all equal the transition's before-state. It then
+inserts the immutable admission-to-transition consumption record in the same
+transaction.
+
+SQLite WAL, a bounded busy timeout, `BEGIN IMMEDIATE`, schema checksums, and
+validated duplicated columns make concurrent local writers fail closed. The
+contract test sends two different authenticated admissions against one
+before-state: exactly one applies and the other is stale. It also covers exact
+retry, invalid buyer signature, conflicting initialization, and close/reopen.
+
+This is local durability and atomicity, not rollback resistance, replication,
+backup policy, high availability, tenant isolation, database encryption,
+operator authentication, prompt release, or production operation. Replacing
+the database file with an older copy can restore older state unless a future
+independent monotonic anchor detects it.
+
 V1, V2, and V3 schemas and reconstruction behavior remain available unchanged,
 with selected-path and rejection/fallback golden commitments enforcing that
 compatibility boundary.
@@ -127,6 +149,8 @@ that a cheaper offer can offset.
   is resolved through `tools/pinned-z3`; its reported version is pinned, but
   its installed binary provenance is an environment assumption. It is not a
   runtime dependency or an authority source.
+- SQLx 0.8.6, SQLite, the local filesystem, and operator path selection for the
+  separately scoped durable replay store.
 
 No blockchain, provider, attestation service, or network is in the current
 trusted computing base because none is called.
@@ -135,6 +159,9 @@ trusted computing base because none is called.
 
 ```text
 hyperintel-core <- hyperintel-assurance <- hyperintel-market <- hyperintel-cli
+                                                    ^
+                                                    |
+                                      hyperintel-persistence
 ```
 
 `AssuranceEvidenceSetV1` is generic and contains no market-derived records.

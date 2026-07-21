@@ -90,6 +90,14 @@ no request-release authority and adds no transport, persistence, cancellation,
 retry, custody, or value movement. It is implemented at `dbfbd48` and does not
 by itself satisfy the R1 private-alpha gate.
 
+The local durable replay store at `f5d3eff` verifies that authenticated
+admission again, serializes SQLite writers, atomically advances only the exact
+committed before-state, and retains an immutable consumption record. Exact
+retry is idempotent and competing admissions fail stale. This closes the local
+concurrent nonce-consumption gap, but it does not authorize request release or
+establish rollback resistance, remote replication, tenant isolation, backup
+and recovery operations, or production database readiness.
+
 ## System boundary
 
 The marketplace is split so no component receives authority merely because it

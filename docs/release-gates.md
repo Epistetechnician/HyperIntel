@@ -78,7 +78,9 @@ No lower state implies a higher one.
   authority.
 - Reliability verification does not establish that committed source
   observations are true or predictive of future delivery.
-- No source imports an HTTP, wallet, EVM, database, or secret-handling runtime.
+- R0 kernel and CLI sources import no HTTP, wallet, EVM, database, or
+  secret-handling runtime. The separately scoped R1 persistence crate imports
+  only local SQLx/SQLite and opens no remote database or provider connection.
 - `pnpm run verify:full` passes on the pinned toolchain.
 
 ## R0 status
@@ -105,10 +107,18 @@ selected route and replay transition, verifies the configured provider receipt
 key over a completed execution receipt, and reconstructs metering from that
 receipt. Every emitted admission and receipt has `authority_granted = false`.
 
-R1 remains open. No durable atomic replay, request release, gateway or provider
-transport, streaming, cancellation, retry, tenant isolation, reconciliation
-runtime, fault-injection campaign, two-provider operation, incident runbook, or
-synthetic no-funds soak has been implemented or exercised.
+The local durable replay store is **Implemented** at `f5d3eff` and locally
+checked by focused concurrency/restart coverage and the full repository gate.
+It verifies the authenticated admission, atomically compares and advances the
+exact buyer state, persists one immutable consumption, makes exact retry
+idempotent, and rejects a competing writer as stale.
+
+R1 remains open. The local store is not rollback-resistant, replicated,
+tenant-isolated, encrypted by this crate, backed up, independently anchored, or
+production operated. No request release, gateway or provider transport,
+streaming, cancellation, retry, receipt-reconciliation runtime, broader fault
+injection, two-provider operation, incident runbook, or synthetic no-funds soak
+has been implemented or exercised.
 
 ## Change control
 

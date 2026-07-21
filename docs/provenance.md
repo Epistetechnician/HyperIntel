@@ -117,6 +117,18 @@ This tracer has no provider runtime, request-release authority, durable replay
 consume, transport, secrets, cancellation, retry, settlement submission,
 custody, funds, or production authority.
 
+- `f5d3eff` adds the local durable replay store. It pins SQLx 0.8.6, uses SQLite
+  WAL plus `BEGIN IMMEDIATE`, checksums its inference-native schema, verifies
+  the full authenticated admission before mutation, atomically advances only
+  an exact canonical before-state, and stores one immutable consumption record.
+  The contract covers invalid buyer authentication, conflicting initialization,
+  two competing admissions, exact retry, validated reads, and close/reopen.
+
+The store reuses only the generic transaction and immutable-replay patterns
+recorded under Source A. It copies no HyperAI schema. It has no remote database,
+rollback-resistant anchor, provider runtime, prompt-release authority,
+credential storage, settlement, custody, funds, or production authority.
+
 ## Licensing boundary
 
 Neither source checkout exposed a root license file during the migration audit.

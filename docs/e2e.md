@@ -5,8 +5,9 @@
 This document is the end-to-end target architecture, not a completion claim.
 The current repository completes the documented local, pure-data R0
 implementation target. Its protocol fixtures are hermetic; its separate formal
-process gate is environment-pinned to Z3 4.15.0. It has no R1 runtime or
-external authority.
+process gate is environment-pinned to Z3 4.15.0. Its R1 work is limited to
+authenticated records and a local replay database; it has no gateway/provider
+runtime or external authority.
 
 Implemented now:
 
@@ -30,20 +31,25 @@ Implemented now:
   admission bound to a reconstructed selected route and replay transition, a
   configured provider-receipt-key signature over one completed execution, and
   metering reconstruction from that signed receipt;
+- a local SQLite replay store that verifies that authenticated admission,
+  serializes writers, atomically advances the exact before-state, retains an
+  immutable consumption record, and makes exact retry idempotent;
 - committed V1–V4 fixtures exercised through the compiled CLI process,
   including caller-trust and fail-closed boundary cases; and
 - a source-hash-bound Z3 4.15.0 two-candidate policy-non-widening check whose
   primary query is `unsat` and weakened-selector replay is `sat`.
 
 Still absent: verification of the underlying reliability source observations,
-current or durably consumed replay state, atomic compare-and-swap, rollback and
-concurrent-writer protection, provider or gateway runtime, network transport,
-persistence, contracts, custody, funds, external settlement, independent
-reproduction, and production authority. The implemented first R1 tracer is a
+rollback-resistant or independently anchored replay state, remote replication,
+tenant isolation, production backup and database operations, provider or
+gateway runtime, network transport, execution-session persistence, contracts,
+custody, funds, external settlement, independent reproduction, and production
+authority. The implemented first R1 tracer is a
 pure-data buyer-policy signature, selected-route admission, and provider-signed
 completed-execution receipt that reconstructs metering without granting
 execution authority. Cancellation, retry, partial-output economics, durable
-admission, and external settlement remain outside that slice. V1, V2, and V3
+execution-session admission, and external settlement remain outside that
+slice. V1, V2, and V3
 are retained for compatibility, keep their narrower explicit nonclaims and
 historical collapsed assurance-rejection profile, and are covered by exact
 rejection/fallback report and bundle commitments.
@@ -321,6 +327,14 @@ cursor. This makes the local artifact independently reconstructable without
 publishing prompt content. It does not authenticate the buyer, read or write a
 database, prove the supplied cursor is current, perform atomic consumption, or
 prevent rollback and concurrent reuse outside the artifact.
+
+The separate local R1 store at `f5d3eff` supplies the missing database lookup
+and atomic consumption step without changing V4. It verifies the authenticated
+admission, uses a serialized SQLite transaction to compare the exact durable
+before-state, advances to the deterministic after-state, and inserts one
+immutable consumption record. It prevents concurrent reuse inside that
+database, but not rollback by restoring an older database artifact, and it
+does not release a prompt or contact a provider.
 
 ## 9. Provider lifecycle
 
@@ -702,6 +716,12 @@ from V4-grade signed-offer, assurance, reliability, and replay inputs, a
 caller-trusted provider receipt-key signature over one completed execution,
 and metering reconstruction from that receipt. It remains pure data and does
 not satisfy the private-alpha gate by itself.
+
+The implemented local replay store at `f5d3eff` then consumes that admission's
+exact transition with an atomic SQLite compare-and-swap. Its concurrency and
+restart contract is locally checked. It is neither production persistence nor
+request-release authority and does not satisfy the private-alpha gate by
+itself.
 
 ## 19. First 12 weeks
 

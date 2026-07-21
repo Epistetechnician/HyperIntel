@@ -54,6 +54,13 @@ advances a full before-state to its successor. It is pure data: no buyer
 signature, current-state lookup, database transaction, compare-and-swap,
 rollback protection, or external nonce consumption is implemented.
 
+That statement and the required V4 nonclaim below remain properties of the V4
+bundle schema. The separate R1 execution tracer adds caller-trusted buyer
+authentication, and `hyperintel-persistence` adds a local authenticated SQLite
+compare-and-swap. Neither changes V4 bytes or causes a bundle verifier to read
+external state. The local store grants no prompt-release authority and makes no
+rollback-resistance, replication, tenant-isolation, or production claim.
+
 Every V4 bundle must carry these exact required nonclaim identifiers:
 
 ```text
