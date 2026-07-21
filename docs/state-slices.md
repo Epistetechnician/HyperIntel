@@ -237,8 +237,9 @@ settlement, funds, deployment, production identity, or production authority.
 
 `crates/hyperintel-runtime-composition/**`, its workspace membership and exact
 dependency pins in `Cargo.toml` and `Cargo.lock`, the focused-test command in
-`package.json`, `docs/runtime-composition.md`, one generic journal-attempt seam
-in `crates/hyperintel-execution-journal/src/lib.rs` with direct coverage in
+`package.json`, `docs/runtime-composition.md`, one exact journal-owned provider-
+agent attempt seam in `crates/hyperintel-execution-journal/Cargo.toml` and
+`crates/hyperintel-execution-journal/src/lib.rs` with direct coverage in
 `crates/hyperintel-execution-journal/tests/durable_journal.rs`, and one atomic
 post-control/pre-harness activation seam in
 `crates/hyperintel-provider-agent/src/execution.rs` with its export in
@@ -257,10 +258,15 @@ durable replay consumption through the existing harness, one metadata-only
 journal start and terminal, one receipt reconciliation, and one opaque
 identity-only composition report.
 
-The generic journal seam must exclusively own start/recovery inspection, one
-caller-supplied async attempt, actual replay inspection, and terminalization;
-it must not retry, resume, or duplicate execution, and the existing journaled
-harness must delegate to it without changing its public behavior. The provider-
+The journal-owned provider-agent seam must exclusively own start/recovery
+inspection, one provider-agent activation/execution attempt, actual replay
+inspection, and terminalization. It must derive status, consumption, outcome,
+and time from the opaque provider-agent result and closed error variants; no
+public API may accept caller-asserted consumption ownership or arbitrary
+terminal metadata. A concurrent or pre-existing consumption not mechanically
+owned by this attempt receives no synthesized terminal. The seam must not
+retry, resume, or duplicate execution, and the existing journaled harness must
+retain its public behavior. The provider-
 agent activation hook must run only after current signed control and exact
 execution bindings plus the canonical harness preflight pass, but before
 harness entry or replay consumption. The public harness preflight must remain

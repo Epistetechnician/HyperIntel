@@ -252,8 +252,10 @@ Queued after hermetic provider-agent control is
 `hyperintel-hermetic-runtime-composition-v1`. It may reuse only the committed
 runtime-configuration, tenant-IAM, operator-secret, provider-agent, local
 execution, replay, journal, and reconciliation public contracts. A narrow
-generic journal-attempt seam must retain sole ownership of start/recovery,
-single invocation, actual replay inspection, and terminalization. A narrow
+journal-owned provider-agent attempt seam must retain sole ownership of start/
+recovery, single invocation, actual replay inspection, and terminalization,
+deriving terminal metadata from the opaque provider-agent result and closed
+errors rather than caller assertions. A narrow
 provider-agent activation seam must run one closure only after current control
 and execution bindings pass and before harness entry. One public read-only
 harness-preflight seam may be added to `hyperintel-execution` only so the
