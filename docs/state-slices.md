@@ -125,6 +125,26 @@ remote database, socket, external provider, credential source, prompt log,
 response log, automatic retry, settlement submission, custody, funds, or
 production authority.
 
+## `hyperintel-receipt-reconciliation-v1`
+
+`crates/hyperintel-reconciliation/**`, its workspace membership and exact
+dependency pins in `Cargo.toml` and `Cargo.lock`, and the focused-test command
+in `package.json`: deterministic, pure-data reconciliation of one authenticated
+execution admission, its exact durable replay consumption, metadata-only
+journal start and terminal records, and the existing completed or incomplete
+local execution outcome. A completed report must reverify and bind the selected
+route, provider receipt, stream commitment, metering receipt, and
+non-authoritative settlement intent. An incomplete report must reverify its
+closed status and stream shape and must contain no metering or settlement
+identity. Rejected-before-consumption, failed-after-consumption, missing,
+conflicting, or mismatched records fail closed and produce no positive report.
+Reports persist only canonical identities, closed statuses, and digests; they
+must never retain prompts, responses, signatures, keys, credentials, arbitrary
+error text, or settlement authority. This slice authorizes no independent
+metering observation, database mutation, socket, provider call, credential
+source, payment, settlement submission, custody, funds, or production
+authority.
+
 ## Reserved future slices
 
 The following names reserve no implementation authority:

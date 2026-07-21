@@ -181,6 +181,17 @@ and consumed-without-terminal states fail closed rather than implicitly
 resuming. It adds no prompt/response retention, network, credentials,
 settlement, funds, or production authority.
 
+The next authorized local R1 slice is
+`hyperintel-receipt-reconciliation-v1`. It may compose only existing HyperIntel
+admission, replay-consumption, journal, execution, metering, and settlement-
+intent records into a deterministic pure-data consistency report. It may not
+copy additional source code or add a runtime dependency beyond the existing
+workspace crates and serialization/error pins. Implementation lineage will be
+recorded only after completed, incomplete, tamper, mismatch, no-content, and
+report-reconstruction contracts plus the full repository gate pass. The
+authorization creates no claim of independent metering, external observation,
+payment, settlement finality, custody, networking, or production authority.
+
 ## Licensing boundary
 
 Neither source checkout exposed a root license file during the migration audit.
