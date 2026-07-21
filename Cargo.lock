@@ -613,6 +613,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperintel-provider-agent"
+version = "0.1.0"
+dependencies = [
+ "data-encoding",
+ "ed25519-dalek",
+ "hyperintel-assurance",
+ "hyperintel-core",
+ "hyperintel-execution",
+ "hyperintel-market",
+ "hyperintel-persistence",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "hyperintel-reconciliation"
 version = "0.1.0"
 dependencies = [

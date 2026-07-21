@@ -12,6 +12,7 @@ members = [
   "crates/hyperintel-runtime-config",
   "crates/hyperintel-tenant-iam",
   "crates/hyperintel-secret-provider",
+  "crates/hyperintel-provider-agent",
 ]
 
 [workspace.package]
