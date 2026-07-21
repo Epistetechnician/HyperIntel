@@ -111,6 +111,14 @@ It has no ambient source, real resolver adapter, network, provider call, cache,
 retry, fallback, persistence, deployment, or production credential authority.
 The gateway and external provider transport remain open.
 
+The hermetic provider-agent control layer landed at `1944478`: signed service
+manifests and short-lived readiness assertions, dedicated trust, signed
+revocation, exact service/offer/runtime/artifact/capability/key/reference
+bindings, and manifest/readiness/revocation rollback checkpoints are verified
+before one existing-harness call. It does not observe health, reserve capacity,
+resolve credentials, open a socket, contact a provider, retry, fail over, or
+authorize deployment. Real provider agents and transport remain open.
+
 ## R2: HyperEVM testnet
 
 Future contracts: provider registry, buyer session escrow, cumulative vouchers,

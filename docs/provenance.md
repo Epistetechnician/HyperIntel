@@ -232,22 +232,21 @@ KMS/HSM/cloud secret manager, provider call, cache, retry, fallback,
 persistence, logging, funds, deployment, production credential, or production
 authority.
 
-Queued after local secret injection is `hyperintel-provider-agent-v1`. It may
-reuse only the existing canonical identity/time/digest, Ed25519, strict
-fail-closed validation, local-execution, and dependency-injection patterns; no
-source code may be copied. New purpose-separated provider-agent trust must bind
-signed service and readiness assertions to exact provider, agent, service,
-selected-offer, runtime-configuration, model, tokenizer, runtime-image,
-capability, configured-receipt-key, text-stream-interface, immutable-secret-
-reference, time, revocation, and rollback-checkpoint identities. One atomic
-wrapper may enter the existing local harness exactly once after preflight,
-with no retry or fallback. Assertions must not be described as observed
-liveness, availability proof, independent attestation, or routing authority.
-No socket, HTTP, TLS,
+`1944478` adds `hyperintel-provider-agent-v1`. It reuses only the repository's
+canonical identity/time/digest, Ed25519, strict fail-closed validation, local-
+execution, and dependency-injection patterns; no source code was copied. New
+purpose-separated provider-agent trust binds signed service and readiness
+assertions to exact provider, agent, service, selected offer, runtime
+configuration, model, tokenizer, runtime image, capabilities, configured
+receipt key, text-stream interface, immutable secret-reference, time,
+revocation, and full-binding checkpoint identities. One atomic wrapper enters
+the existing local harness at most once after preflight, with no retry or
+fallback. Assertions are not described as observed liveness, availability
+proof, independent attestation, or routing authority. No socket, HTTP, TLS,
 ambient credential, secret resolution, external provider, live transport,
 health observation, automatic routing/failover, new replay authority, signing-
 key custody, settlement, funds, deployment, production identity, or production
-authority may be added.
+authority was added.
 
 ## Licensing boundary
 

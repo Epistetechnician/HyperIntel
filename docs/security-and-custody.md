@@ -56,6 +56,15 @@ to the crate, so their cleanup remains resolver-owned. No ambient credential
 source or real adapter exists; a successful material-bearing result may itself
 confer external capability.
 
+The provider-agent control layer at `1944478` uses dedicated manifest,
+readiness, and revocation keys and binds caller checkpoints to the full agent
+deployment identity. Control evaluation and replay consumption use the same
+explicit time, preventing a pre-revocation assertion from authorizing a later
+consume. Invalid control cannot consume replay or invoke the provider/signer.
+The records are provider/operator assertions, not independent health or
+availability evidence, and the crate holds no signing key or credential and
+opens no external connection.
+
 ## Custody posture
 
 The target design avoids custody of provider API credentials and minimizes

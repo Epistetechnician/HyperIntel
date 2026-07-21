@@ -66,6 +66,9 @@ Implemented now:
   resolution call bound to the exact runtime, consumer, selected provider,
   immutable secret reference, purpose, operation, trust, and revocation
   checkpoint, returning only bounded redacted zeroize-on-drop material;
+- provider-signed service-manifest and short-lived readiness assertions with
+  purpose-separated trust, signed revocation, three-way rollback/fork
+  checkpointing, and atomic preflight before one existing-harness call;
 - committed V1–V4 fixtures exercised through the compiled CLI process,
   including caller-trust and fail-closed boundary cases; and
 - a source-hash-bound Z3 4.15.0 two-candidate policy-non-widening check whose
@@ -857,6 +860,17 @@ zeroize-on-drop. The slice includes no ambient source or real resolver adapter,
 performs no network or provider call, and grants no deployment or production
 credential authority; it does not satisfy the private-alpha provider-runtime
 gate by itself.
+
+The hermetic provider-agent control slice at `1944478` authenticates one exact
+service manifest and `READY` assertion before entering the existing local
+harness. It binds provider, agent, service, selected offer, runtime
+configuration, model/tokenizer/runtime artifacts, capabilities, receipt key,
+text-stream interface, secret-reference identity, evaluation/consumption time,
+current trust, revocation state, and caller checkpoint. Invalid control leaves
+replay and injected ports untouched; valid control enters the harness once
+with no retry or fallback. The assertions are not observed health or capacity,
+and the slice adds no socket, provider transport, real credential use, live
+stream/cancellation propagation, deployment, or production authority.
 
 ## 19. First 12 weeks
 

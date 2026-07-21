@@ -52,6 +52,9 @@ The current repository implements a **local hermetic foundation only**:
 - atomic local operator-secret authorization and injected resolution with
   dedicated trust, exact runtime/provider/reference/purpose bindings, one
   resolver call, and bounded redacted zeroize-on-drop material;
+- purpose-separated signed provider-agent manifests, readiness assertions,
+  rollback/fork checkpoints, and atomic preflight before the existing local
+  harness consumes replay or invokes an injected provider;
 - an offline-verifiable V1–V4 fixture corpus exercised through the real CLI
   process; and
 - a source-hash-bound, two-candidate Z3 policy-non-widening check.
@@ -143,6 +146,11 @@ Exact source mappings and exclusions are recorded in
   resolution call returning bounded redacted zeroize-on-drop material. It has
   no ambient credential source, network adapter, cache, retry, or external
   effect.
+- `hyperintel-provider-agent`: signed service-manifest, readiness, revocation,
+  and checkpoint verification bound to the selected provider, service, offer,
+  runtime, artifacts, capabilities, receipt key, interface, and secret-
+  reference identity before one call into the existing hermetic harness. Its
+  assertions are not observed health and it adds no provider transport.
 - `hyperintel-cli`: offline JSON bundle verifier; its only external effect is
   reading caller-selected evidence and trusted-key files and writing the verdict
   to stdout. It dispatches only explicit V1/V2/V3/V4 bundle schema identifiers.

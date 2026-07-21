@@ -286,6 +286,25 @@ or provider adapter; it performs no network request and does not establish the
 authenticity or cleanup behavior of an injected resolver. Possession of a
 successful result may itself confer external capability.
 
+## Hermetic provider-agent control
+
+`hyperintel-provider-agent` at `1944478` verifies separate provider-signed
+service-manifest and short-lived readiness assertions under purpose-separated
+keys and signed revocation state. The complete control lineage binds the exact
+provider, agent instance, selected service and offer, runtime configuration,
+model/tokenizer/runtime artifacts, capability set, receipt key, text-stream
+interface, and immutable secret-reference digest. Caller checkpoints pin the
+manifest, readiness, and revocation sequences and same-sequence digests to the
+full binding.
+
+Control evaluation time must equal replay-consumption time. Invalid, stale,
+revoked, forked, or context-mixed control fails before the existing harness is
+entered. Valid control permits one harness call with no retry or fallback; the
+existing harness remains the sole replay consumer. These records authenticate
+provider/operator assertions only. They do not observe health, prove
+availability or model identity, resolve a secret, open a socket, or contact an
+external provider.
+
 V1, V2, and V3 schemas and reconstruction behavior remain available unchanged,
 with selected-path and rejection/fallback golden commitments enforcing that
 compatibility boundary.

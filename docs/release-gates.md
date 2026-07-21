@@ -179,6 +179,14 @@ This is an in-process seam only—not an ambient credential source, real
 provider/KMS adapter, network path, deployment, or production credential
 acceptance.
 
+Hermetic provider-agent control is **Implemented** at `1944478` and checked by
+fourteen direct contracts plus the full repository gate. Signed manifests,
+readiness, revocation, and full-binding checkpoints fail closed before replay
+consumption or port invocation; valid control enters the existing harness once.
+This is authenticated provider/operator assertion handling—not observed health,
+capacity reservation, external transport, real credential use, live provider
+operation, deployment, or private-alpha acceptance.
+
 R1 remains open. The local store is not rollback-resistant, replicated,
 tenant-isolated, encrypted by this crate, backed up, independently anchored, or
 production operated. The harness is not an HTTP gateway, external provider

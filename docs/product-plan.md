@@ -156,6 +156,14 @@ resolver invocation. Material is bounded, redacted, nonserializable, and
 zeroize-on-drop. No ambient credential source, real adapter, network request,
 cache, retry, deployment, or production credential authority is present.
 
+The hermetic provider-agent control layer at `1944478` closes the local signed
+manifest/readiness-to-harness preflight shape. Purpose-separated trust,
+revocation, exact deployment/route bindings, equal evaluation and replay-
+consumption time, and manifest/readiness/revocation rollback checkpoints are
+rechecked atomically before one existing-harness call. This authenticates a
+provider/operator assertion; it does not observe health, reserve capacity,
+resolve credentials, contact a provider, retry, fail over, or deploy a service.
+
 ## System boundary
 
 The marketplace is split so no component receives authority merely because it
