@@ -41,6 +41,10 @@ The current repository implements a **local hermetic foundation only**:
 - deterministic identity-only reconciliation across admission, durable replay
   consumption, journal lineage, completed or incomplete execution, stream,
   provider receipt, metering, and non-authoritative settlement intent;
+- a bounded, strict local-hermetic runtime configuration document with
+  canonical identity, explicit distinct SQLite paths, bounded pool sizes, and
+  opaque immutable-version secret references that never resolve secret
+  material;
 - an offline-verifiable V1–V4 fixture corpus exercised through the real CLI
   process; and
 - a source-hash-bound, two-candidate Z3 policy-non-widening check.
@@ -117,6 +121,11 @@ Exact source mappings and exclusions are recorded in
   reconstruction, stable identity-only reports, fail-closed stream/time/status
   checks, and adversarial tamper coverage. It performs no database mutation or
   external effect.
+- `hyperintel-runtime-config`: bounded strict JSON validation, canonical
+  configuration identity, conservative local SQLite path validation, bounded
+  pool settings, and opaque immutable-version secret references. It reads only
+  an explicit caller-selected file and opens no database, socket, environment
+  source, or secret provider.
 - `hyperintel-cli`: offline JSON bundle verifier; its only external effect is
   reading caller-selected evidence and trusted-key files and writing the verdict
   to stdout. It dispatches only explicit V1/V2/V3/V4 bundle schema identifiers.

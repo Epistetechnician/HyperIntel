@@ -152,6 +152,14 @@ self-consistent impossible times, tamper, and report reconstruction fail
 closed. This is internal local consistency, not independent metering or
 production reconciliation.
 
+Local runtime configuration is **Implemented** at `ec46411` and locally checked
+by twelve direct contracts plus the full repository gate. It validates a
+bounded explicit `LOCAL_HERMETIC` document, canonical identity, distinct
+absolute lexical SQLite paths, bounded pool sizes, strict nested schemas, and
+opaque immutable-version secret references. It does not resolve credentials,
+open databases, bind sockets, contact providers, or establish production
+configuration acceptance.
+
 R1 remains open. The local store is not rollback-resistant, replicated,
 tenant-isolated, encrypted by this crate, backed up, independently anchored, or
 production operated. The harness is not an HTTP gateway, external provider

@@ -86,6 +86,14 @@ self-consistent impossible states fail closed. External observation,
 production persistence, payment, settlement finality, and production
 reconciliation remain open.
 
+The strict local runtime configuration landed at `ec46411`: one bounded
+explicit `LOCAL_HERMETIC` JSON document, canonical identity, distinct absolute
+lexical SQLite paths, bounded connection counts, and opaque immutable-version
+secret references. Unknown fields and unsafe path shapes fail closed. It does
+not merge ambient state, resolve secrets, create paths, open databases, bind
+sockets, or authorize deployment. Tenant IAM, secret resolution, gateway and
+provider transport, production persistence operations, and soak remain open.
+
 ## R2: HyperEVM testnet
 
 Future contracts: provider registry, buyer session escrow, cumulative vouchers,

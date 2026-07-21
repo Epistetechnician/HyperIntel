@@ -23,6 +23,13 @@ then checks the complete local identity graph without retaining content. None
 of these components runs or authorizes a networked or production execution
 runtime.
 
+A separate runtime-configuration crate validates one bounded explicit
+local-hermetic JSON document. It canonicalizes the configuration identity,
+requires distinct absolute lexical SQLite file paths and bounded pool sizes,
+and represents secrets only as opaque immutable-version references. It does
+not open either database, resolve a secret, read ambient configuration, or
+grant deployment authority.
+
 ## First vertical slice
 
 ```text
@@ -232,6 +239,20 @@ observation remains an opaque identity-bound commitment; reconciliation makes
 no claim that it is authentic or independent. The crate opens no database or
 socket, mutates no state, and grants no execution, payment, settlement, or
 production authority.
+
+## Local runtime configuration
+
+`hyperintel-runtime-config` at `ec46411` validates at most 65,536 bytes from an
+explicit caller-selected file. The V1 schema accepts only `LOCAL_HERMETIC`,
+rejects unknown fields at every nesting level, requires canonical identifiers,
+distinct absolute lexical SQLite file paths, and connection bounds of 1–16.
+Its domain-separated digest is stable across JSON field order.
+
+`SecretReferenceV1` contains a provider identity, a logical handle, and a
+nonzero digest of an immutable provider-issued version identifier or metadata
+record. That digest must never be derived from secret bytes. The crate has no
+resolver and does not inspect environment variables, create paths, open a
+database or socket, contact a provider, or grant credential authority.
 
 V1, V2, and V3 schemas and reconstruction behavior remain available unchanged,
 with selected-path and rejection/fallback golden commitments enforcing that

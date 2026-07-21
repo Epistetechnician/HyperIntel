@@ -193,16 +193,15 @@ The report grants no authority and creates no claim of independent metering,
 external observation authenticity, payment, settlement finality, custody,
 networking, or production readiness.
 
-Queued after receipt reconciliation is
-`hyperintel-runtime-configuration-v1`. It may reuse only the existing canonical
-JSON, strict identifier, digest, serialization, error, and local-file test
-patterns to validate a bounded local-hermetic configuration document and an
-opaque version-pinned secret reference. It may not copy source code or resolve
-secrets, merge ambient configuration, create paths, open databases, bind a
-socket, contact a provider, or add settlement authority. Implementation lineage
-will be recorded only after size, schema, canonical digest, path, collision,
-connection-bound, secret-redaction, no-side-effect, and full repository gates
-pass.
+`ec46411` adds `hyperintel-runtime-configuration-v1`. It reuses only the
+repository's canonical JSON, strict identifier, digest, serialization, error,
+and local-file test patterns. No source code or runtime dependency was copied.
+The implementation validates a bounded local-hermetic document and opaque
+immutable-version secret references; it does not resolve secrets, merge
+ambient configuration, create paths, open databases, bind a socket, contact a
+provider, or add settlement authority. Size, schema, canonical digest, path,
+collision, connection-bound, secret-redaction, no-side-effect, strict Clippy,
+and full repository gates passed on the committed candidate.
 
 ## Licensing boundary
 

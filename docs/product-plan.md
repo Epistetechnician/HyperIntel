@@ -133,6 +133,13 @@ separate SQLite transactions, this is fail-closed recovery classification, not
 cross-database atomicity, automatic retry, production backup, or operator
 reconciliation automation.
 
+The strict local runtime configuration at `ec46411` closes the configuration
+shape dependency for later deployable candidates. It validates a bounded
+explicit document, canonical identity, distinct absolute lexical SQLite paths,
+bounded pool sizes, and opaque immutable-version secret references. It has no
+ambient configuration, default credential, resolver, database open, socket,
+provider call, or deployment authority.
+
 ## System boundary
 
 The marketplace is split so no component receives authority merely because it

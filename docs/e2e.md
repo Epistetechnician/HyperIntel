@@ -8,8 +8,9 @@ implementation target. Its protocol fixtures are hermetic; its separate formal
 process gate is environment-pinned to Z3 4.15.0. Its R1 work is limited to
 authenticated records, a local replay database, one hermetic in-process
 execution harness, authenticated reroute lineage, and a separate metadata-only
-execution journal plus pure-data receipt reconciliation; it has no HTTP
-gateway, external provider runtime, or external authority.
+execution journal plus pure-data receipt reconciliation and strict local
+runtime configuration; it has no HTTP gateway, external provider runtime, or
+external authority.
 
 Implemented now:
 
@@ -54,6 +55,9 @@ Implemented now:
   admission, durable consumption, journal lineage, completed or incomplete
   execution, stream shape and timing, provider receipt, metering, and
   non-authoritative settlement intent without retaining content;
+- a strict 65,536-byte local-hermetic runtime configuration schema with a
+  canonical digest, explicit distinct SQLite paths, bounded connection counts,
+  and opaque immutable-version secret references without secret resolution;
 - committed V1–V4 fixtures exercised through the compiled CLI process,
   including caller-trust and fail-closed boundary cases; and
 - a source-hash-bound Z3 4.15.0 two-candidate policy-non-widening check whose
@@ -818,6 +822,13 @@ mismatches and stores no prompt, response, signature, key, credential, or
 arbitrary error text. It establishes local consistency only—not independent
 metering, observation authenticity, payment, settlement finality, or
 private-alpha acceptance.
+
+The strict runtime configuration slice at `ec46411` validates one explicit
+local-hermetic JSON document without defaults, environment merging,
+interpolation, hot reload, path creation, database opening, socket binding, or
+secret resolution. It provides configuration identity and deployment inputs,
+not a deployed runtime or credential authority, and does not satisfy the
+private-alpha gate by itself.
 
 ## 19. First 12 weeks
 
