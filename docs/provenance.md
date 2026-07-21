@@ -168,6 +168,16 @@ repository code. It adds no route selection, buyer signing authority, HTTP or
 provider transport, health monitor, credential custody, settlement, funds, or
 production authority.
 
+The next authorized local R1 slice is
+`hyperintel-durable-execution-journal-v1`. It may reuse the existing local SQLx
+and checksum patterns to create a separate metadata-only SQLite journal around
+the hermetic harness. It may not change the replay schema or copy additional
+source code. Implementation lineage will be recorded only after restart,
+idempotency, conflict, no-content, and consumed-without-terminal contracts plus
+the full repository gate pass. The authorization creates no cross-database
+atomicity claim, prompt/response retention, network, credentials, settlement,
+funds, or production authority.
+
 ## Licensing boundary
 
 Neither source checkout exposed a root license file during the migration audit.

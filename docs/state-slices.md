@@ -105,6 +105,26 @@ cancellation as failure, open a socket, contact an external provider, read a
 credential, submit settlement, hold custody, move funds, or grant production
 authority.
 
+## `hyperintel-durable-execution-journal-v1`
+
+`crates/hyperintel-execution-journal/**`, its workspace membership and exact
+dependency pins in `Cargo.toml` and `Cargo.lock`, and the focused-test command
+in `package.json`: a separate operator-selected local SQLite journal for
+metadata-only execution starts and terminal records. It may persist only
+canonical admission, buyer, provider, prompt-commitment, replay-consumption,
+outcome, status, and timestamp identities; it must never persist request or
+response bodies, credentials, keys, arbitrary error text, or settlement
+authority. Exact start and terminal retries are idempotent; conflicting reuse
+fails closed. Restart inspection must distinguish a start with no replay
+consumption from a consumed admission with no terminal record. The integrated
+wrapper may start the journal, invoke the existing local harness, and retain a
+terminal identity, but it cannot make journal and replay databases one atomic
+transaction. A consumed-without-terminal state is non-retriable and requires a
+new authenticated nonce or operator reconciliation. This slice authorizes no
+remote database, socket, external provider, credential source, prompt log,
+response log, automatic retry, settlement submission, custody, funds, or
+production authority.
+
 ## Reserved future slices
 
 The following names reserve no implementation authority:
