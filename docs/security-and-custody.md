@@ -40,6 +40,13 @@ test receipt keys are fixtures, not an approved key-management boundary. No
 HTTP, TLS, external provider, ambient credential, live cancellation, wallet,
 chain, funds, or production authority is present.
 
+The tenant IAM verifier at `f8a43dd`, hardened through `70a344b`, adds local
+authorization separation, not runtime tenant isolation. Dedicated tenant-
+namespaced keys, exact resource-owner bindings, short-lived one-action grants,
+and signed rollback-pinned revocation evidence are checked as pure data. No
+process, filesystem, database row, cache, network, encryption-key, or log
+partition is implemented or claimed.
+
 ## Custody posture
 
 The target design avoids custody of provider API credentials and minimizes

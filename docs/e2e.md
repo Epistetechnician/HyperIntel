@@ -9,8 +9,8 @@ process gate is environment-pinned to Z3 4.15.0. Its R1 work is limited to
 authenticated records, a local replay database, one hermetic in-process
 execution harness, authenticated reroute lineage, and a separate metadata-only
 execution journal plus pure-data receipt reconciliation and strict local
-runtime configuration; it has no HTTP gateway, external provider runtime, or
-external authority.
+runtime configuration plus pure-data tenant authorization separation; it has
+no HTTP gateway, external provider runtime, or external authority.
 
 Implemented now:
 
@@ -58,6 +58,9 @@ Implemented now:
 - a strict 65,536-byte local-hermetic runtime configuration schema with a
   canonical digest, explicit distinct SQLite paths, bounded connection counts,
   and opaque immutable-version secret references without secret resolution;
+- one-action, maximum-300-second tenant access grants bound to caller-owned
+  policy, runtime, audience, resource ownership, and operation context, with
+  dedicated IAM keys and signed rollback-pinned revocation snapshots;
 - committed V1–V4 fixtures exercised through the compiled CLI process,
   including caller-trust and fail-closed boundary cases; and
 - a source-hash-bound Z3 4.15.0 two-candidate policy-non-widening check whose
@@ -829,6 +832,15 @@ interpolation, hot reload, path creation, database opening, socket binding, or
 secret resolution. It provides configuration identity and deployment inputs,
 not a deployed runtime or credential authority, and does not satisfy the
 private-alpha gate by itself.
+
+The tenant IAM slice at `f8a43dd`, hardened through `70a344b`, adds deterministic
+local authorization separation. It verifies fixed-role one-action grants with
+exact tenant, principal, audience, runtime, policy, resource, and operation
+bindings and requires fresh signed revocation evidence under the current trust
+record and rollback checkpoint. It issues no token, authenticates no real
+person or organization, consumes no grant, and enforces no runtime or storage
+isolation. It does not satisfy the private-alpha tenant-isolation or production-
+IAM gate by itself.
 
 ## 19. First 12 weeks
 

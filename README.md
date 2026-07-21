@@ -45,6 +45,10 @@ The current repository implements a **local hermetic foundation only**:
   canonical identity, explicit distinct SQLite paths, bounded pool sizes, and
   opaque immutable-version secret references that never resolve secret
   material;
+- pure-data tenant authorization separation with fixed roles, one-action
+  short-lived signed grants, exact caller-owned resource and operation
+  bindings, purpose-separated tenant IAM keys, and signed rollback-pinned
+  revocation evidence;
 - an offline-verifiable V1–V4 fixture corpus exercised through the real CLI
   process; and
 - a source-hash-bound, two-candidate Z3 policy-non-widening check.
@@ -126,6 +130,10 @@ Exact source mappings and exclusions are recorded in
   pool settings, and opaque immutable-version secret references. It reads only
   an explicit caller-selected file and opens no database, socket, environment
   source, or secret provider.
+- `hyperintel-tenant-iam`: caller-supplied tenant policy, dedicated
+  tenant-namespaced Ed25519 trust, fixed roles and actions, exact resource
+  ownership, 300-second grants, and signed freshness-bounded revocation
+  snapshots. It issues no token and provides no runtime tenant isolation.
 - `hyperintel-cli`: offline JSON bundle verifier; its only external effect is
   reading caller-selected evidence and trusted-key files and writing the verdict
   to stdout. It dispatches only explicit V1/V2/V3/V4 bundle schema identifiers.

@@ -160,6 +160,15 @@ opaque immutable-version secret references. It does not resolve credentials,
 open databases, bind sockets, contact providers, or establish production
 configuration acceptance.
 
+Local tenant IAM verification is **Implemented** at `f8a43dd` and hardened
+through `70a344b`. Twelve direct contracts plus the full repository gate bind one fixed
+action to caller-owned tenant, principal, audience, runtime, IAM policy,
+resource ownership, and operation context under dedicated tenant-scoped keys
+and signed revocation evidence rechecked against current trust and rollback
+state. This establishes local authorization separation only—not identity
+proof, token issuance, durable token consumption, gateway enforcement, runtime
+tenant isolation, or production IAM.
+
 R1 remains open. The local store is not rollback-resistant, replicated,
 tenant-isolated, encrypted by this crate, backed up, independently anchored, or
 production operated. The harness is not an HTTP gateway, external provider

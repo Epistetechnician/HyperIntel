@@ -94,6 +94,15 @@ not merge ambient state, resolve secrets, create paths, open databases, bind
 sockets, or authorize deployment. Tenant IAM, secret resolution, gateway and
 provider transport, production persistence operations, and soak remain open.
 
+The pure-data tenant IAM verifier landed at `f8a43dd` and was hardened through
+`70a344b`: fixed roles, one-action maximum-300-second grants, exact caller-owned
+audience/runtime/policy/resource/operation bindings, dedicated tenant-
+namespaced IAM keys, and signed monotonic revocation snapshots rechecked
+against current trust and caller-pinned rollback checkpoints. It provides
+local authorization separation only. Token issuance, durable token replay
+prevention, gateway enforcement, runtime tenant isolation, and production IAM
+remain open.
+
 ## R2: HyperEVM testnet
 
 Future contracts: provider registry, buyer session escrow, cumulative vouchers,

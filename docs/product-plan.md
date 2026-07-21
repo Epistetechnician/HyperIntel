@@ -140,6 +140,14 @@ bounded pool sizes, and opaque immutable-version secret references. It has no
 ambient configuration, default credential, resolver, database open, socket,
 provider call, or deployment authority.
 
+The pure-data tenant IAM verifier at `f8a43dd`, hardened through `70a344b`, closes
+the local authorization-decision shape. Dedicated tenant-namespaced keys,
+one-action 300-second grants, caller-owned resource and operation context, and
+signed rollback-pinned revocation state fail closed under exact current trust.
+This is authorization separation only; token issuance, real identity, replay
+consumption, gateway enforcement, runtime tenant isolation, and production IAM
+remain open.
+
 ## System boundary
 
 The marketplace is split so no component receives authority merely because it

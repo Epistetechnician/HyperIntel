@@ -203,15 +203,19 @@ provider, or add settlement authority. Size, schema, canonical digest, path,
 collision, connection-bound, secret-redaction, no-side-effect, strict Clippy,
 and full repository gates passed on the committed candidate.
 
-Queued after runtime configuration is `hyperintel-tenant-iam-v1`. It may reuse
-only existing HyperIntel canonical JSON, strict identifier and timestamp,
-caller-controlled key registry, Ed25519 verification, fixed trust-root class,
-digest, and fail-closed validation patterns. It must define inference-native
-buyer-tenant, principal, fixed-role, fixed-scope, signed-token, revocation, and
-resource-ownership records without copying source code or adding a runtime
-dependency. It may not issue tokens, generate or store keys, read ambient
-configuration or credentials, open a filesystem, database, or socket, contact
-a provider, consume durable replay state, release a request, or grant
+`f8a43dd` adds `hyperintel-tenant-iam-v1`; `1ddfee2` binds each validated
+revocation proof to its exact trust record, evaluation time, and current
+caller checkpoint; `70a344b` freezes the complete role/action/resource matrix,
+revocation tamper boundary, and redacted validated wrappers. The slice reuses
+only existing HyperIntel canonical JSON,
+strict identifier and timestamp, Ed25519, digest, and fail-closed validation
+patterns. Its tenant policy, dedicated purpose-separated IAM trust registry,
+one-action grant, exact caller expectation, resource ownership, signed
+revocation snapshot, rollback checkpoint, and opaque result are new inference-
+native records; no source code or runtime dependency was copied. It issues no
+token, generates or stores no key, reads no ambient configuration or
+credential, opens no filesystem, database, or socket, contacts no provider,
+consumes no durable replay state, releases no request, and grants no
 settlement, custody, funds, production-IAM, or production authority.
 
 ## Licensing boundary

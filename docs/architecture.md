@@ -254,6 +254,22 @@ record. That digest must never be derived from secret bytes. The crate has no
 resolver and does not inspect environment variables, create paths, open a
 database or socket, contact a provider, or grant credential authority.
 
+## Local tenant authorization separation
+
+`hyperintel-tenant-iam` at `f8a43dd`, hardened through `70a344b`, verifies one exact
+buyer-tenant action under caller-supplied policy and expected context. Signed
+grants bind tenant, principal, issuer, audience, runtime and IAM snapshot
+identities, resource ownership, operation context, and a maximum 300-second
+validity window.
+
+IAM keys are tenant-namespaced and purpose-separated between access grants and
+revocation snapshots. Revocation evidence is independently signed, bounded in
+time, monotonic, and checked against a current caller-pinned sequence and
+digest plus the exact revocation trust record. Grant, key, and self-revocation
+boundaries are inclusive. The success type is opaque and explicitly non-
+authoritative. This is local authorization separation, not process, storage,
+cache, network, encryption-key, or log isolation and not production IAM.
+
 V1, V2, and V3 schemas and reconstruction behavior remain available unchanged,
 with selected-path and rejection/fallback golden commitments enforcing that
 compatibility boundary.
