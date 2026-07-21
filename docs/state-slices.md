@@ -45,12 +45,13 @@ consumption, or concurrent request serialization.
 `crates/hyperintel-market/src/execution.rs`, the corresponding exports in
 `crates/hyperintel-market/src/lib.rs`, and execution contract coverage in
 `crates/hyperintel-market/tests/vertical_slice.rs`: caller-trusted
-buyer-policy signatures, non-authoritative admission bound to a fully verified
-selected V4 evidence bundle, provider-receipt-key signatures over completed
-execution and usage, and reconstruction of the existing metering receipt from
-that verified provider receipt. This slice is pure data. It authorizes no
-socket, provider call, prompt transport, credential storage, persistent replay
-state, cancellation runtime, retry, settlement submission, or value movement.
+buyer-policy signatures, non-authoritative admission bound to a reconstructed
+selected route from V4-grade signed-offer, assurance, reliability, and replay
+inputs, provider-receipt-key signatures over completed execution and usage,
+and reconstruction of the existing metering receipt from that verified
+provider receipt. This slice is pure data. It authorizes no socket, provider
+call, prompt transport, credential storage, persistent replay state,
+cancellation runtime, retry, settlement submission, or value movement.
 
 ## Reserved future slices
 

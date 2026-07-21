@@ -32,10 +32,11 @@ reconciliation, fault injection, and a synthetic no-funds soak.
 
 The authorized first tracer is pure data: verify the exact buyer policy under a
 caller-trusted `BuyerPolicy` key, bind a non-authoritative admission to a fully
-verified selected V4 bundle, verify one completed execution under the selected
-provider's configured receipt key, and reconstruct metering from that signed
-receipt. Gateway/provider sockets, persistence, cancellation, retry, and
-external effects remain separately gated.
+reconstructed selected route from V4-grade signed-offer, assurance,
+reliability, and replay inputs, verify one completed execution under the
+selected provider's configured receipt key, and reconstruct metering from that
+signed receipt. Gateway/provider sockets, persistence, cancellation, retry,
+and external effects remain separately gated.
 
 ## R2: HyperEVM testnet
 

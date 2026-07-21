@@ -36,7 +36,7 @@ current or durably consumed replay state, atomic compare-and-swap, rollback and
 concurrent-writer protection, provider or gateway runtime, network transport,
 persistence, contracts, custody, funds, external settlement, independent
 reproduction, and production authority. The next authorized tracer is a
-pure-data buyer-policy signature, selected-V4 admission, and provider-signed
+pure-data buyer-policy signature, selected-route admission, and provider-signed
 completed-execution receipt that can reconstruct metering without granting
 execution authority. Cancellation, retry, partial-output economics, durable
 admission, and external settlement remain outside that slice. V1, V2, and V3
@@ -693,7 +693,8 @@ receipts, tenant isolation, receipt reconciliation, fault injection, and a
 synthetic no-funds soak.
 
 The first R1 tracer is narrower: caller-trusted buyer-policy authentication,
-admission bound to a fully verified selected V4 bundle, a caller-trusted
+admission bound to a reconstructed selected route from V4-grade signed-offer,
+assurance, reliability, and replay inputs, a caller-trusted
 provider receipt-key signature over one completed execution, and metering
 reconstruction from that receipt. It remains pure data and does not satisfy the
 private-alpha gate by itself.
