@@ -23,6 +23,13 @@ Generalized foundations:
   outcome schema or development signer.
 - `crates/outcomes-settlement/src/lib.rs` -> deterministic intent identity,
   canonical payloads, idempotency, and fail-closed preflight patterns.
+- `crates/outcomes-domain/src/authorization.rs`,
+  `crates/outcomes-domain/src/receipt_identity.rs`, and the injected boundary
+  pattern in `crates/outcomes-api/src/lib.rs` -> bounded authenticated-request
+  failures, canonical receipt identity, and caller-supplied verification
+  dependencies consulted for the inference-native authenticated execution
+  tracer. No operator role header, HTTP route, outcome record, development
+  authority, or persistence adapter is copied.
 
 Explicitly excluded:
 

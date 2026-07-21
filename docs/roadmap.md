@@ -30,6 +30,13 @@ two provider agents, request deadlines, streaming and cancellation, health and
 failover, signed execution and metering receipts, tenant isolation, receipt
 reconciliation, fault injection, and a synthetic no-funds soak.
 
+The authorized first tracer is pure data: verify the exact buyer policy under a
+caller-trusted `BuyerPolicy` key, bind a non-authoritative admission to a fully
+verified selected V4 bundle, verify one completed execution under the selected
+provider's configured receipt key, and reconstruct metering from that signed
+receipt. Gateway/provider sockets, persistence, cancellation, retry, and
+external effects remain separately gated.
+
 ## R2: HyperEVM testnet
 
 Future contracts: provider registry, buyer session escrow, cumulative vouchers,

@@ -32,13 +32,16 @@ Implemented now:
   primary query is `unsat` and weakened-selector replay is `sat`.
 
 Still absent: verification of the underlying reliability source observations,
-buyer-policy authentication, current or durably consumed replay state, atomic
-compare-and-swap, rollback and concurrent-writer protection, signed
-execution/metering/settlement receipts, provider or gateway runtime, network
-transport, persistence, contracts, custody, funds, external settlement,
-independent reproduction, and production authority. V1, V2, and V3 are retained
-for compatibility, keep their narrower explicit nonclaims and historical
-collapsed assurance-rejection profile, and are covered by exact
+current or durably consumed replay state, atomic compare-and-swap, rollback and
+concurrent-writer protection, provider or gateway runtime, network transport,
+persistence, contracts, custody, funds, external settlement, independent
+reproduction, and production authority. The next authorized tracer is a
+pure-data buyer-policy signature, selected-V4 admission, and provider-signed
+completed-execution receipt that can reconstruct metering without granting
+execution authority. Cancellation, retry, partial-output economics, durable
+admission, and external settlement remain outside that slice. V1, V2, and V3
+are retained for compatibility, keep their narrower explicit nonclaims and
+historical collapsed assurance-rejection profile, and are covered by exact
 rejection/fallback report and bundle commitments.
 
 Repository mutation authority comes only from [`docs/state-slices.md`](state-slices.md).
@@ -688,6 +691,12 @@ replay, an OpenAI-compatible gateway, two provider agents, deadlines,
 streaming, cancellation, health and failover, signed execution and metering
 receipts, tenant isolation, receipt reconciliation, fault injection, and a
 synthetic no-funds soak.
+
+The first R1 tracer is narrower: caller-trusted buyer-policy authentication,
+admission bound to a fully verified selected V4 bundle, a caller-trusted
+provider receipt-key signature over one completed execution, and metering
+reconstruction from that receipt. It remains pure data and does not satisfy the
+private-alpha gate by itself.
 
 ## 19. First 12 weeks
 

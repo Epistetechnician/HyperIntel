@@ -82,6 +82,13 @@ explicit nonclaims. R0 does not verify the underlying observation truth,
 provider/buyer execution-receipt signatures, live consumed-nonce state, bonds,
 SLA credits, chain commitments, or value movement.
 
+The first authorized R1 tracer authenticates the exact buyer policy against a
+caller-owned key registry and binds a provider-signed completed-execution
+receipt to a fully verified selected V4 bundle. Existing metering is then
+reconstructed from the signed usage and output commitments. The tracer grants
+no request-release authority and adds no transport, persistence, cancellation,
+retry, custody, or value movement.
+
 ## System boundary
 
 The marketplace is split so no component receives authority merely because it

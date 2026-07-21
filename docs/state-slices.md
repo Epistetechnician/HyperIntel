@@ -40,6 +40,18 @@ future provider performance, durable state, state currentness, atomic
 compare-and-swap, rollback resistance, buyer authentication, external nonce
 consumption, or concurrent request serialization.
 
+## `hyperintel-authenticated-execution-receipt-v1`
+
+`crates/hyperintel-market/src/execution.rs`, the corresponding exports in
+`crates/hyperintel-market/src/lib.rs`, and execution contract coverage in
+`crates/hyperintel-market/tests/vertical_slice.rs`: caller-trusted
+buyer-policy signatures, non-authoritative admission bound to a fully verified
+selected V4 evidence bundle, provider-receipt-key signatures over completed
+execution and usage, and reconstruction of the existing metering receipt from
+that verified provider receipt. This slice is pure data. It authorizes no
+socket, provider call, prompt transport, credential storage, persistent replay
+state, cancellation runtime, retry, settlement submission, or value movement.
+
 ## Reserved future slices
 
 The following names reserve no implementation authority:
