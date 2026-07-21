@@ -17,6 +17,7 @@ pub use evidence::{
     build_assurance_evidence_set_v1, evidence_blob_ref_v1, verify_assurance_evidence_set_v1,
 };
 pub use signature::{
-    RegisteredVerificationKeyV1, SignatureError, SignedStatementV1, VerificationKeyRegistry,
+    Ed25519MessageVerificationInputV1, RegisteredVerificationKeyV1, SignatureError,
+    SignedStatementV1, VerificationKeyRegistry, verify_ed25519_message_v1,
     verify_signed_statement_v1,
 };

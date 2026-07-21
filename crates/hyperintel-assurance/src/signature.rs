@@ -36,6 +36,28 @@ pub struct VerificationKeyRegistry {
     keys: BTreeMap<(ProtocolId, ProtocolId), RegisteredVerificationKeyV1>,
 }
 
+/// Domain-specific canonical message and detached Ed25519 verification metadata.
+///
+/// The caller owns the message schema and must include every protocol field whose mutation
+/// should invalidate the signature. This type centralizes only key identity, validity,
+/// revocation, encoding, and cryptographic verification.
+pub struct Ed25519MessageVerificationInputV1<'a> {
+    /// Claimed signer identity.
+    pub signer_id: &'a ProtocolId,
+    /// Claimed verification-key identity.
+    pub key_id: &'a ProtocolId,
+    /// First instant at which the signature is valid.
+    pub issued_at: &'a UtcTimestamp,
+    /// Last instant at which the signature is valid.
+    pub expires_at: &'a UtcTimestamp,
+    /// Must be `ed25519`.
+    pub algorithm: &'a str,
+    /// Lowercase hexadecimal Ed25519 signature.
+    pub signature_hex: &'a str,
+    /// Exact domain-specific canonical message bytes.
+    pub message: &'a [u8],
+}
+
 impl VerificationKeyRegistry {
     /// Register a key, rejecting duplicate `(signer_id, key_id)` pairs.
     ///
@@ -190,21 +212,50 @@ pub fn verify_signed_statement_v1(
     if statement.schema_version != "hyperintel.signed-statement.v1" {
         return Err(SignatureError::UnsupportedSchema);
     }
-    if statement.algorithm != "ed25519" {
+    let message = statement.signing_message()?;
+    verify_ed25519_message_v1(
+        &Ed25519MessageVerificationInputV1 {
+            signer_id: &statement.signer_id,
+            key_id: &statement.key_id,
+            issued_at: &statement.issued_at,
+            expires_at: &statement.expires_at,
+            algorithm: &statement.algorithm,
+            signature_hex: &statement.signature_hex,
+            message: &message,
+        },
+        registry,
+        evaluated_at,
+    )
+}
+
+/// Verify a domain-specific canonical message under caller-owned Ed25519 trust.
+///
+/// This function does not interpret the message schema. It verifies only the supplied
+/// signature, key identity, caller-assigned key record, validity, and revocation state.
+///
+/// # Errors
+///
+/// Returns a closed failure for algorithm, key, time, revocation, encoding, or signature.
+pub fn verify_ed25519_message_v1(
+    input: &Ed25519MessageVerificationInputV1<'_>,
+    registry: &VerificationKeyRegistry,
+    evaluated_at: &UtcTimestamp,
+) -> Result<(), SignatureError> {
+    if input.algorithm != "ed25519" {
         return Err(SignatureError::UnsupportedAlgorithm);
     }
-    if statement.issued_at > statement.expires_at
-        || evaluated_at < &statement.issued_at
-        || evaluated_at > &statement.expires_at
+    if input.issued_at > input.expires_at
+        || evaluated_at < input.issued_at
+        || evaluated_at > input.expires_at
     {
         return Err(SignatureError::OutsideValidity);
     }
     let registered = registry
-        .get(&statement.signer_id, &statement.key_id)
+        .get(input.signer_id, input.key_id)
         .ok_or(SignatureError::UnknownKey)?;
-    if statement.issued_at < registered.valid_from
-        || statement.issued_at > registered.valid_until
-        || statement.expires_at > registered.valid_until
+    if input.issued_at < &registered.valid_from
+        || input.issued_at > &registered.valid_until
+        || input.expires_at > &registered.valid_until
         || evaluated_at < &registered.valid_from
         || evaluated_at > &registered.valid_until
     {
@@ -219,11 +270,11 @@ pub fn verify_signed_statement_v1(
     }
     let key = decode_verifying_key(&registered.public_key_hex)?;
     let bytes = HEXLOWER
-        .decode(statement.signature_hex.as_bytes())
+        .decode(input.signature_hex.as_bytes())
         .map_err(|_| SignatureError::InvalidEncoding)?;
     let signature =
         Signature::try_from(bytes.as_slice()).map_err(|_| SignatureError::InvalidEncoding)?;
-    key.verify_strict(&statement.signing_message()?, &signature)
+    key.verify_strict(input.message, &signature)
         .map_err(|_| SignatureError::InvalidSignature)
 }
 
