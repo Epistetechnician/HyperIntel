@@ -412,13 +412,26 @@ pub struct TenantRevocationVerificationContextV1<'a> {
 }
 
 /// Authenticated, freshness-bounded revocation state.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ValidatedTenantRevocationSnapshotV1 {
     snapshot: TenantRevocationSnapshotV1,
     snapshot_digest: Sha256Digest,
     evaluated_at: UtcTimestamp,
     signer_key_id: ProtocolId,
     signer_key_record_digest: Sha256Digest,
+}
+
+impl fmt::Debug for ValidatedTenantRevocationSnapshotV1 {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ValidatedTenantRevocationSnapshotV1")
+            .field("snapshot", &"[REDACTED]")
+            .field("snapshot_digest", &"[REDACTED]")
+            .field("evaluated_at", &self.evaluated_at)
+            .field("signer_key_id", &self.signer_key_id)
+            .field("signer_key_record_digest", &"[REDACTED]")
+            .finish_non_exhaustive()
+    }
 }
 
 impl ValidatedTenantRevocationSnapshotV1 {

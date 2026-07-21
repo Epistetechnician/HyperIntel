@@ -424,6 +424,145 @@ fn contract_validated_revocation_rejects_registry_substitution_and_checkpoint_ad
 }
 
 #[test]
+fn contract_fixed_role_action_resource_matrix_has_no_implicit_grants() -> TestResult {
+    let fixture = fixture()?;
+    let cases = [
+        (
+            TenantRoleV1::InferenceCaller,
+            TenantIamActionV1::SubmitInference,
+        ),
+        (
+            TenantRoleV1::InferenceCaller,
+            TenantIamActionV1::CancelOwnInference,
+        ),
+        (
+            TenantRoleV1::InferenceCaller,
+            TenantIamActionV1::ReadOwnInference,
+        ),
+        (
+            TenantRoleV1::InferenceCaller,
+            TenantIamActionV1::ReadOwnEvidence,
+        ),
+        (
+            TenantRoleV1::TenantAdministrator,
+            TenantIamActionV1::ReadTenantAudit,
+        ),
+        (
+            TenantRoleV1::TenantAdministrator,
+            TenantIamActionV1::ManageTenantPrincipals,
+        ),
+        (
+            TenantRoleV1::TenantAdministrator,
+            TenantIamActionV1::ManageTenantTokenKeys,
+        ),
+        (
+            TenantRoleV1::TenantAuditor,
+            TenantIamActionV1::ReadTenantAudit,
+        ),
+    ];
+    for (role, action) in cases {
+        let (iam, grant, expectation) = grant_for_role_action(&fixture, role, action)?;
+        let context = TenantAccessVerificationContextV1 {
+            iam_snapshot: &iam,
+            expectation: &expectation,
+            ..access_context(&fixture)
+        };
+        verify_tenant_access_grant_v1(&grant, &context)?;
+    }
+
+    for role in [
+        TenantRoleV1::TenantAdministrator,
+        TenantRoleV1::TenantAuditor,
+    ] {
+        let (iam, grant, expectation) =
+            grant_for_role_action(&fixture, role, TenantIamActionV1::ReadOwnInference)?;
+        let context = TenantAccessVerificationContextV1 {
+            iam_snapshot: &iam,
+            expectation: &expectation,
+            ..access_context(&fixture)
+        };
+        assert!(matches!(
+            verify_tenant_access_grant_v1(&grant, &context),
+            Err(TenantIamError::ActionNotGranted)
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn contract_signed_revocation_tamper_and_wrong_signer_fail_closed() -> TestResult {
+    let fixture = fixture()?;
+    let mut cases = Vec::new();
+    let mut changed = fixture.signed_revocations.clone();
+    changed.schema_version = "hyperintel.signed-tenant-revocation-snapshot.v2".to_owned();
+    cases.push(changed);
+    let mut changed = fixture.signed_revocations.clone();
+    changed.snapshot.schema_version = "hyperintel.tenant-revocation-snapshot.v2".to_owned();
+    cases.push(changed);
+    let mut changed = fixture.signed_revocations.clone();
+    changed.algorithm = "ed448".to_owned();
+    cases.push(changed);
+    let mut changed = fixture.signed_revocations.clone();
+    changed.signer_id = id("issuer:other")?;
+    cases.push(changed);
+    let mut changed = fixture.signed_revocations.clone();
+    changed.key_id = id("key:other")?;
+    cases.push(changed);
+    let mut changed = fixture.signed_revocations.clone();
+    changed.snapshot.tenant_id = id("tenant:beta")?;
+    cases.push(changed);
+    let mut changed = fixture.signed_revocations.clone();
+    changed.snapshot.issuer_id = id("issuer:other")?;
+    cases.push(changed);
+    let mut changed = fixture.signed_revocations.clone();
+    changed.snapshot.audience = id("gateway:other")?;
+    cases.push(changed);
+    let mut changed = fixture.signed_revocations.clone();
+    changed.snapshot.runtime_configuration_digest = digest(99);
+    cases.push(changed);
+    let mut changed = fixture.signed_revocations.clone();
+    changed.snapshot.sequence = 0;
+    cases.push(changed);
+    let mut changed = fixture.signed_revocations.clone();
+    changed.snapshot.expires_at = time("2026-07-21T10:06:01Z")?;
+    cases.push(changed);
+    let mut changed = fixture.signed_revocations.clone();
+    changed.snapshot.grant_revocations = vec![TenantGrantRevocationV1 {
+        tenant_id: id("tenant:alpha")?,
+        grant_digest: fixture.grant.digest()?,
+        revoked_at: fixture.evaluated_at.clone(),
+    }];
+    cases.push(changed);
+    let mut changed = fixture.signed_revocations.clone();
+    changed.signature_hex = "not-hex".to_owned();
+    cases.push(changed);
+
+    for changed in cases {
+        let context = TenantRevocationVerificationContextV1 {
+            key_registry: &fixture.keys,
+            checkpoint: &fixture.revocation_checkpoint,
+            evaluated_at: &fixture.evaluated_at,
+        };
+        assert!(verify_tenant_revocation_snapshot_v1(&changed, &context).is_err());
+    }
+
+    let wrong_signer = SigningKey::from_bytes(&[11; 32]);
+    let mut wrong_signature = fixture.signed_revocations.clone();
+    resign_revocations(&mut wrong_signature, &wrong_signer)?;
+    let wrong_checkpoint = checkpoint(1, wrong_signature.digest()?)?;
+    let context = TenantRevocationVerificationContextV1 {
+        key_registry: &fixture.keys,
+        checkpoint: &wrong_checkpoint,
+        evaluated_at: &fixture.evaluated_at,
+    };
+    assert!(matches!(
+        verify_tenant_revocation_snapshot_v1(&wrong_signature, &context),
+        Err(TenantIamError::InvalidSignature)
+    ));
+    Ok(())
+}
+
+#[test]
 fn contract_snapshot_order_duplicates_schemas_and_unknown_fields_fail_closed() -> TestResult {
     let fixture = fixture()?;
     let mut duplicate = fixture.iam.snapshot().clone();
@@ -498,6 +637,12 @@ fn contract_debug_redacts_bearer_and_resource_metadata() -> TestResult {
     let rendered = format!("{verified:?}");
     assert!(!rendered.contains("principal:alice"));
     assert!(!rendered.contains(&verified.grant_digest().to_string()));
+    let policy_debug = format!("{:?}", fixture.iam);
+    assert!(!policy_debug.contains("principal:alice"));
+    assert!(!policy_debug.contains(&fixture.iam.snapshot_digest().to_string()));
+    let revocation_debug = format!("{:?}", fixture.revocations);
+    assert!(!revocation_debug.contains(&fixture.revocations.snapshot_digest().to_string()));
+    assert!(!revocation_debug.contains(&fixture.grant.digest()?.to_string()));
     Ok(())
 }
 
@@ -648,6 +793,83 @@ fn unsigned_grant(
         key_id: id("key:access")?,
         algorithm: ED25519_ALGORITHM_V1.to_owned(),
         signature_hex: String::new(),
+    })
+}
+
+fn grant_for_role_action(
+    fixture: &Fixture,
+    role: TenantRoleV1,
+    action: TenantIamActionV1,
+) -> TestResult<(
+    ValidatedTenantIamSnapshotV1,
+    SignedTenantAccessGrantV1,
+    TenantAccessExpectationV1,
+)> {
+    let mut snapshot = fixture.iam.snapshot().clone();
+    snapshot.role_bindings[0].role = role;
+    let iam = snapshot.validate()?;
+    let resource = resource_for_action(action)?;
+    let mut grant = fixture.grant.clone();
+    grant.claims.iam_snapshot_digest = iam.snapshot_digest();
+    grant.claims.action = action;
+    grant.claims.resource = resource.clone();
+    resign_grant(&mut grant, &fixture.access_signer)?;
+    let mut expectation = fixture.expectation.clone();
+    expectation.iam_snapshot_digest = iam.snapshot_digest();
+    expectation.action = action;
+    expectation.resource = resource;
+    Ok((iam, grant, expectation))
+}
+
+fn resource_for_action(action: TenantIamActionV1) -> TestResult<TenantResourceBindingV1> {
+    let (resource_kind, purpose, principal_owned) = match action {
+        TenantIamActionV1::SubmitInference => (
+            TenantResourceKindV1::InferenceRequest,
+            TenantResourcePurposeV1::Submit,
+            true,
+        ),
+        TenantIamActionV1::CancelOwnInference => (
+            TenantResourceKindV1::InferenceRequest,
+            TenantResourcePurposeV1::Cancel,
+            true,
+        ),
+        TenantIamActionV1::ReadOwnInference => (
+            TenantResourceKindV1::InferenceRequest,
+            TenantResourcePurposeV1::Read,
+            true,
+        ),
+        TenantIamActionV1::ReadOwnEvidence => (
+            TenantResourceKindV1::EvidenceBundle,
+            TenantResourcePurposeV1::Read,
+            true,
+        ),
+        TenantIamActionV1::ReadTenantAudit => (
+            TenantResourceKindV1::TenantAudit,
+            TenantResourcePurposeV1::Read,
+            false,
+        ),
+        TenantIamActionV1::ManageTenantPrincipals => (
+            TenantResourceKindV1::PrincipalDirectory,
+            TenantResourcePurposeV1::Administer,
+            false,
+        ),
+        TenantIamActionV1::ManageTenantTokenKeys => (
+            TenantResourceKindV1::VerificationKeyRegistry,
+            TenantResourcePurposeV1::Administer,
+            false,
+        ),
+    };
+    Ok(TenantResourceBindingV1 {
+        schema_version: TENANT_RESOURCE_BINDING_SCHEMA_V1.to_owned(),
+        tenant_id: id("tenant:alpha")?,
+        resource_kind,
+        purpose,
+        resource_digest: digest(30),
+        owner_principal_id: if principal_owned {
+            Some(id("principal:alice")?)
+        } else {
+            None
+        },
     })
 }
 

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt};
 
 use hyperintel_core::{ProtocolId, Sha256Digest, UtcTimestamp, domain_separated_digest};
 use serde::{Deserialize, Serialize};
@@ -110,12 +110,22 @@ pub struct TenantIamSnapshotV1 {
 }
 
 /// Validated, indexed policy snapshot and canonical identity.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ValidatedTenantIamSnapshotV1 {
     snapshot: TenantIamSnapshotV1,
     snapshot_digest: Sha256Digest,
     principals: BTreeMap<ProtocolId, TenantPrincipalV1>,
     role_bindings: BTreeMap<(ProtocolId, TenantRoleV1), TenantRoleBindingV1>,
+}
+
+impl fmt::Debug for ValidatedTenantIamSnapshotV1 {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ValidatedTenantIamSnapshotV1")
+            .field("snapshot", &"[REDACTED]")
+            .field("snapshot_digest", &"[REDACTED]")
+            .finish_non_exhaustive()
+    }
 }
 
 impl TenantIamSnapshotV1 {
