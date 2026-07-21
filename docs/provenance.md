@@ -36,6 +36,13 @@ Generalized foundations:
   durable replay store. Only the pinned dependency versions and generic
   transaction pattern are reused; no claim, outcome, resolution, market,
   dispute, settlement, event, outbox, or authorization-denial schema is copied.
+- `crates/outcomes-api/src/readiness.rs` and
+  `crates/outcomes-runner/src/lib.rs` -> injected clock/provider boundaries, a
+  versioned execution port, and a deterministic scripted implementation
+  consulted for the authorized local execution harness. The harness may reuse
+  only these generic dependency-injection and hermetic-test patterns. No HTTP
+  server, outcome request, validator manifest, process runner, OCI runner,
+  development authority, operator header, or runtime adapter is copied.
 
 Explicitly excluded:
 
@@ -128,6 +135,15 @@ The store reuses only the generic transaction and immutable-replay patterns
 recorded under Source A. It copies no HyperAI schema. It has no remote database,
 rollback-resistant anchor, provider runtime, prompt-release authority,
 credential storage, settlement, custody, funds, or production authority.
+
+The next authorized local R1 slice is
+`hyperintel-local-execution-harness-v1`. It is limited to injected in-process
+providers and signers, deterministic OpenAI-shaped text-stream records, one
+durable authenticated replay consume, selected-provider enforcement, and local
+receipt-to-metering-to-settlement-intent reconstruction. Its implementation
+lineage will be recorded only after the slice passes its required gates. The
+authorization itself creates no gateway, provider, network, credential,
+settlement, custody, funds, or production authority.
 
 ## Licensing boundary
 

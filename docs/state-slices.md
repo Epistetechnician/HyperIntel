@@ -66,6 +66,25 @@ database. It authorizes no remote database, socket, prompt release, provider
 call, credential storage, request body, cancellation, retry, settlement
 submission, custody, or value movement.
 
+## `hyperintel-local-execution-harness-v1`
+
+`crates/hyperintel-execution/**`, its workspace membership and exact dependency
+pins in `Cargo.toml` and `Cargo.lock`, the focused-test command in
+`package.json`, and direct execution-harness contract coverage: a text-only,
+in-process OpenAI Chat Completions compatibility shape; an exact prompt
+commitment; authenticated admission verification; one durable replay consume;
+strict selected-provider binding; deterministic scripted streaming, deadline,
+and cancellation semantics; a configured provider-receipt signer; completed
+execution receipt verification; metering reconstruction; and derivation of the
+existing non-authoritative settlement intent. Only a newly applied replay
+consumption may invoke the selected provider. An exact retry fails closed and
+does not execute again. Failed, cancelled, or late attempts cannot produce a
+completed receipt, metering receipt, or settlement intent. This slice may use
+only injected in-process provider and signer implementations. It authorizes no
+socket, HTTP server, external provider call, ambient credential, environment
+secret, tool call, image or audio request, live cancellation propagation,
+automatic reroute, settlement submission, custody, funds, or value movement.
+
 ## Reserved future slices
 
 The following names reserve no implementation authority:
