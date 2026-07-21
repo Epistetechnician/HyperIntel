@@ -143,12 +143,21 @@ binding, and cross-row/cross-store/timestamp tamper contracts plus the full
 repository gate. Existing starts do not authorize implicit execution. The
 journal persists no prompt or response body and grants no authority.
 
+Local receipt reconciliation is **Implemented** at `f2b12a2` and locally
+checked by five direct contracts plus the full repository gate. It rebuilds a
+stable identity-only report across authenticated admission, durable
+consumption, journal lineage, completed or incomplete execution, stream,
+provider receipt, metering, and settlement intent. Completed/incomplete shape,
+self-consistent impossible times, tamper, and report reconstruction fail
+closed. This is internal local consistency, not independent metering or
+production reconciliation.
+
 R1 remains open. The local store is not rollback-resistant, replicated,
 tenant-isolated, encrypted by this crate, backed up, independently anchored, or
 production operated. The harness is not an HTTP gateway, external provider
 runtime, encrypted transport, live stream/cancellation implementation, health
 system, or automatic failover path. The reroute slice does not select or sign
-the next route. No production IAM, tenant isolation, external
+the next route. No production IAM, tenant isolation, external/production
 receipt reconciliation, sustained two-provider traffic, incident runbook,
 synthetic no-funds soak, independent reproduction, or private-alpha operator
 acceptance has been implemented or exercised.

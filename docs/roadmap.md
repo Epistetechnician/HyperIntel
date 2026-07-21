@@ -74,9 +74,17 @@ The metadata-only execution journal landed at `6a2d9d5`: separate SQLite start
 and terminal records, serialized exact retries, conflict and tamper rejection,
 actual replay-store-bound recovery, no implicit resume, and restart coverage
 for consumed-without-terminal crash states. It stores no prompt or response
-body. Replay and journal writes are not one atomic transaction; reconciliation,
-rollback resistance, replication, production backup, and automatic recovery
-remain future operations work.
+body. Replay and journal writes are not one atomic transaction; cross-database
+repair, rollback resistance, replication, production backup, and automatic
+recovery remain future operations work.
+
+The local receipt reconciler landed at `f2b12a2`: deterministic identity-only
+reports bind authenticated admission, durable replay consumption, journal
+lineage, completed or incomplete execution, stream shape and timing, provider
+receipt, metering, and non-authoritative settlement intent. Tamper and
+self-consistent impossible states fail closed. External observation,
+production persistence, payment, settlement finality, and production
+reconciliation remain open.
 
 ## R2: HyperEVM testnet
 

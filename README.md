@@ -38,6 +38,9 @@ The current repository implements a **local hermetic foundation only**:
   starts and terminals, queries the durable replay store during recovery,
   rejects implicit resume, and classifies non-retriable consumed-without-
   terminal crash states without retaining prompts or responses;
+- deterministic identity-only reconciliation across admission, durable replay
+  consumption, journal lineage, completed or incomplete execution, stream,
+  provider receipt, metering, and non-authoritative settlement intent;
 - an offline-verifiable V1–V4 fixture corpus exercised through the real CLI
   process; and
 - a source-hash-bound, two-candidate Z3 policy-non-widening check.
@@ -68,6 +71,9 @@ individual writes are durable and validated, but no cross-database atomicity is
 claimed. An interrupted consumed admission without a matching terminal fails
 closed and requires a new authenticated nonce or explicit operator
 reconciliation.
+The reconciliation report checks local record consistency only. It does not
+establish independent metering, observation authenticity, payment, settlement
+finality, or production authority.
 
 ## Repository lineage
 
@@ -107,6 +113,10 @@ Exact source mappings and exclusions are recorded in
   classification, tamper detection, and a fail-closed wrapper around the
   hermetic harness. It stores no prompt, response, credential, key, arbitrary
   error text, or settlement authority.
+- `hyperintel-reconciliation`: pure-data completed and incomplete receipt-graph
+  reconstruction, stable identity-only reports, fail-closed stream/time/status
+  checks, and adversarial tamper coverage. It performs no database mutation or
+  external effect.
 - `hyperintel-cli`: offline JSON bundle verifier; its only external effect is
   reading caller-selected evidence and trusted-key files and writing the verdict
   to stdout. It dispatches only explicit V1/V2/V3/V4 bundle schema identifiers.

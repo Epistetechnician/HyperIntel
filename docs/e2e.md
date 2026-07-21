@@ -8,8 +8,8 @@ implementation target. Its protocol fixtures are hermetic; its separate formal
 process gate is environment-pinned to Z3 4.15.0. Its R1 work is limited to
 authenticated records, a local replay database, one hermetic in-process
 execution harness, authenticated reroute lineage, and a separate metadata-only
-execution journal; it has no HTTP gateway, external provider runtime, or
-external authority.
+execution journal plus pure-data receipt reconciliation; it has no HTTP
+gateway, external provider runtime, or external authority.
 
 Implemented now:
 
@@ -50,6 +50,10 @@ Implemented now:
   terminals, actual replay-store-bound restart classification, conflict and
   tamper rejection, no implicit resume, and explicit consumed-without-terminal
   recovery state;
+- an identity-only receipt-reconciliation report that rechecks authenticated
+  admission, durable consumption, journal lineage, completed or incomplete
+  execution, stream shape and timing, provider receipt, metering, and
+  non-authoritative settlement intent without retaining content;
 - committed V1–V4 fixtures exercised through the compiled CLI process,
   including caller-trust and fail-closed boundary cases; and
 - a source-hash-bound Z3 4.15.0 two-candidate policy-non-widening check whose
@@ -69,8 +73,8 @@ execution authority. The separate local harness adds deterministic in-process
 request release and partial-stream evidence only after a new durable consume;
 it adds no external execution or settlement authority. Partial-output
 economics, live cancellation, automatic reroute, response-bearing session
-persistence, automated reconciliation, and external settlement remain outside
-the implemented slices.
+persistence, external/production reconciliation, and external settlement
+remain outside the implemented slices.
 V1, V2, and V3
 are retained for compatibility, keep their narrower explicit nonclaims and
 historical collapsed assurance-rejection profile, and are covered by exact
@@ -806,6 +810,14 @@ non-retriable. Because journal and replay writes remain separate SQLite
 transactions, this adds crash inspection rather than atomic execution-session
 commit or production recovery, and it does not satisfy the private-alpha gate
 by itself.
+
+The pure-data receipt reconciler at `f2b12a2` then produces a deterministic
+identity-only report for valid completed and incomplete local executions. It
+rejects record, stream, timing, economic, authority, and terminal-shape
+mismatches and stores no prompt, response, signature, key, credential, or
+arbitrary error text. It establishes local consistency only—not independent
+metering, observation authenticity, payment, settlement finality, or
+private-alpha acceptance.
 
 ## 19. First 12 weeks
 

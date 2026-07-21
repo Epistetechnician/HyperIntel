@@ -18,8 +18,10 @@ The current implementation covers pure-data portions of planes 1–4 plus one
 in-process execution harness backed by the local replay store and a separate
 metadata-only execution journal. It verifies and consumes an admission before
 invoking an injected scripted provider, and it can classify local crash states
-without retaining request or response bodies. It does not run or authorize a
-networked or production execution runtime.
+without retaining request or response bodies. A separate pure-data reconciler
+then checks the complete local identity graph without retaining content. None
+of these components runs or authorizes a networked or production execution
+runtime.
 
 ## First vertical slice
 
@@ -211,6 +213,26 @@ operator reconciliation; the code supplies no automatic resume, rollback
 resistance, remote replication, network transport, funds, or production
 authority.
 
+## Local receipt reconciliation
+
+`hyperintel-reconciliation` at `f2b12a2` reconstructs one positive,
+identity-only consistency report from the authenticated admission, its exact
+durable replay consumption, journal start and terminal, and the completed or
+incomplete local execution outcome. Completed reports reverify the selected
+route, provider-signed execution receipt, stream commitment, metering, and
+non-authoritative settlement intent. Incomplete reports reverify the closed
+status, stream shape, and time bounds and contain no metering or settlement
+identity.
+
+The five direct contracts cover stable alpha and beta reports, every incomplete
+status, admission/replay/journal/chunk/receipt/metering/settlement/authority
+tamper, completed/incomplete terminal swaps, self-consistent impossible times,
+report reconstruction, and serialized no-content behavior. An optional buyer
+observation remains an opaque identity-bound commitment; reconciliation makes
+no claim that it is authentic or independent. The crate opens no database or
+socket, mutates no state, and grants no execution, payment, settlement, or
+production authority.
+
 V1, V2, and V3 schemas and reconstruction behavior remain available unchanged,
 with selected-path and rejection/fallback golden commitments enforcing that
 compatibility boundary.
@@ -259,6 +281,9 @@ hyperintel-core <- hyperintel-assurance <- hyperintel-market <- hyperintel-cli
                                                     ^
                                                     |
                                 hyperintel-execution-journal
+                                                    ^
+                                                    |
+                                  hyperintel-reconciliation
 ```
 
 `AssuranceEvidenceSetV1` is generic and contains no market-derived records.

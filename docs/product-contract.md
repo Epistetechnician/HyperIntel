@@ -109,6 +109,20 @@ The harness has no HTTP server, socket, ambient credential, external provider,
 live cancellation propagation, wallet, settlement submission, custody, funds,
 or production authority.
 
+## Local receipt-reconciliation contract
+
+The reconciler accepts only one fully authenticated selected admission, the
+matching durable replay consumption, exact metadata-only journal lineage, and
+one completed or incomplete local execution outcome. It deterministically
+reconstructs an identity-only report and fails closed on any mismatch.
+
+Completed reports reverify the provider receipt, exact stream commitment,
+metering, selected route, and settlement intent. Incomplete reports verify the
+closed status, stream shape, and time bounds and contain no metering or
+settlement identity. The report retains no prompts, responses, signatures,
+keys, credentials, or arbitrary errors. It proves internal local consistency,
+not independent observation, payment, settlement finality, or authority.
+
 ## Settlement contract
 
 The current pure-data settlement builder requires a successful route, fully
