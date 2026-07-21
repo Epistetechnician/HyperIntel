@@ -5,6 +5,8 @@
 //! implementations are injected in process. This crate opens no socket, reads
 //! no ambient credential, and submits no settlement or value movement.
 
+mod reroute;
+
 use hyperintel_assurance::VerificationKeyRegistry;
 use hyperintel_core::{
     CanonicalizationError, ProtocolId, Sha256Digest, UtcTimestamp, domain_separated_digest,
@@ -24,6 +26,12 @@ use hyperintel_persistence::{
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+pub use reroute::{
+    AUTHENTICATED_REROUTE_STATE_SLICE_V1, AuthenticatedRerouteContextV1, AuthenticatedRerouteError,
+    AuthenticatedRerouteExecutionV1, AuthenticatedRerouteRecordV1,
+    execute_authenticated_reroute_v1,
+};
 
 /// State slice emitted by the local execution harness.
 pub const LOCAL_EXECUTION_STATE_SLICE_V1: &str = "hyperintel-local-execution-harness-v1";
