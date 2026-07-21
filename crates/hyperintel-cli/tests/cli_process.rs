@@ -16,18 +16,38 @@ fn run_cli(arguments: &[PathBuf]) -> Result<std::process::Output, Box<dyn std::e
 }
 
 #[test]
-fn contract_cli_process_verifies_v4_with_separate_caller_trust()
+fn contract_cli_process_verifies_v1_through_v4_with_separate_caller_trust()
 -> Result<(), Box<dyn std::error::Error>> {
-    let output = run_cli(&[
-        fixture_path("evidence-v4.json"),
-        fixture_path("trusted-keys-v4.json"),
-    ])?;
-    assert!(output.status.success());
-    assert_eq!(
-        String::from_utf8(output.stdout)?,
-        "verified market evidence bundle 6ae73c889a82cdc83712260de55fb1e08d74064745b541a81138fb0bd797fd13\n"
-    );
-    assert!(output.stderr.is_empty());
+    for (evidence, trust, bundle_digest) in [
+        (
+            "evidence-v1.json",
+            "trusted-keys-v1-v2.json",
+            "7614469c8d4febc50753d52d34741bc70cc3bcc4954c6ea93b1cb8621c157785",
+        ),
+        (
+            "evidence-v2.json",
+            "trusted-keys-v1-v2.json",
+            "781fab0921e649922f53ceb67f9037ddfd0f039922d3663ef54b29f7bd042cab",
+        ),
+        (
+            "evidence-v3.json",
+            "trusted-keys-v4.json",
+            "59db4b80a9fec85a2fa8e72d7e6cb36d446918c8a85a896883be7d83d50c8fbf",
+        ),
+        (
+            "evidence-v4.json",
+            "trusted-keys-v4.json",
+            "6ae73c889a82cdc83712260de55fb1e08d74064745b541a81138fb0bd797fd13",
+        ),
+    ] {
+        let output = run_cli(&[fixture_path(evidence), fixture_path(trust)])?;
+        assert!(output.status.success(), "{evidence}");
+        assert_eq!(
+            String::from_utf8(output.stdout)?,
+            format!("verified market evidence bundle {bundle_digest}\n")
+        );
+        assert!(output.stderr.is_empty(), "{evidence}");
+    }
     Ok(())
 }
 

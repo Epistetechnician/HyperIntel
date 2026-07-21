@@ -44,7 +44,8 @@ pub use routing::{
     RouteEvaluationRecordV1, RoutingContextV1, RoutingError, SignedRoutingContextV1,
     evaluate_reliability_artifact_verified_route_v1, evaluate_route_v1, evaluate_signed_route_v1,
     select_reliability_artifact_verified_route_v1, select_route_v1, select_signed_route_v1,
-    validate_eligibility_report_v1, validate_route_evaluation_record_v1,
+    validate_eligibility_report_v1, validate_route_evaluation_against_offers_v1,
+    validate_route_evaluation_record_v1,
 };
 pub use settlement::{
     SettlementError, SettlementIntentV1, derive_settlement_intent_v1, validate_settlement_intent_v1,

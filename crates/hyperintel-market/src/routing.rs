@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use hyperintel_assurance::{
-    AssuranceAcceptancePolicyV1, AssuranceClaimV1, AssuranceEvidenceSetV1, VerificationKeyRegistry,
-    conjoin_envelopes_v1, evaluate_assurance_v1, verify_assurance_evidence_set_v1,
+    AssuranceAcceptancePolicyV1, AssuranceClaimV1, AssuranceEnvelopeV1, AssuranceEvidenceSetV1,
+    VerificationKeyRegistry, conjoin_envelopes_v1, evaluate_assurance_v1,
+    verify_assurance_evidence_set_v1,
 };
 use hyperintel_core::{
     AssuranceProperty, AtomicAmount, CanonicalizationError, CapacityOfferV1, ExactArithmeticError,
@@ -185,6 +186,17 @@ pub struct EligibilityReportV1 {
     pub report_digest: Sha256Digest,
 }
 
+impl EligibilityReportV1 {
+    /// Recompute the eligibility-report identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns when canonical identity construction fails.
+    pub fn digest(&self) -> Result<Sha256Digest, CanonicalizationError> {
+        eligibility_digest(self)
+    }
+}
+
 #[derive(Serialize)]
 struct EligibilityIdentity<'a> {
     schema_version: &'a str,
@@ -248,6 +260,17 @@ pub struct RouteDecisionV1 {
     pub authority_granted: bool,
     /// Digest of every preceding field.
     pub route_digest: Sha256Digest,
+}
+
+impl RouteDecisionV1 {
+    /// Recompute the route-decision identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns when canonical identity construction fails.
+    pub fn digest(&self) -> Result<Sha256Digest, CanonicalizationError> {
+        route_digest(self)
+    }
 }
 
 #[derive(Serialize)]
@@ -318,6 +341,15 @@ pub struct RouteEvaluationRecordV1 {
 }
 
 impl RouteEvaluationRecordV1 {
+    /// Recompute the route-evaluation identity.
+    ///
+    /// # Errors
+    ///
+    /// Returns when canonical identity construction fails.
+    pub fn digest(&self) -> Result<Sha256Digest, CanonicalizationError> {
+        route_evaluation_digest(self)
+    }
+
     fn into_selected_route(self) -> Result<RouteDecisionV1, RoutingError> {
         match self.outcome {
             RouteEvaluationOutcomeV1::Selected(route) => Ok(*route),
@@ -853,38 +885,66 @@ fn evaluate_provider_constraints(
         {
             failures.insert(EligibilityFailureV1::ProviderDenied);
         }
-        if let Ok(provider_envelope_digest) =
-            verify_offer_assurance(context, provider, service_digest)
-        {
-            if let Some(signed_offers) = signed_offers {
-                let signature_is_valid =
-                    signed_offers
-                        .get(&offer_digest)
-                        .is_some_and(|signed_offer| {
-                            verify_signed_capacity_offer_v1(
-                                signed_offer,
-                                provider,
-                                provider_envelope_digest,
-                                context.verification_keys,
-                                context.evaluated_at,
-                            )
-                            .is_ok()
-                        });
-                if !signature_is_valid {
-                    failures.insert(EligibilityFailureV1::OfferSignatureInvalid);
-                }
+        match evaluate_offer_assurance(context, provider, service_digest) {
+            OfferAssuranceEvaluation::EvidenceInvalid => {
+                failures.insert(EligibilityFailureV1::AssuranceEvidenceInvalid);
             }
-        } else {
-            failures.insert(EligibilityFailureV1::AssurancePolicyRejected);
-            if signed_offers.is_some() {
-                failures.insert(EligibilityFailureV1::OfferSignatureInvalid);
+            OfferAssuranceEvaluation::PolicyRejected {
+                provider_envelope_digest,
+            } => {
+                failures.insert(EligibilityFailureV1::AssurancePolicyRejected);
+                evaluate_offer_signature(
+                    context,
+                    provider,
+                    offer_digest,
+                    provider_envelope_digest,
+                    signed_offers,
+                    failures,
+                );
+            }
+            OfferAssuranceEvaluation::Accepted {
+                provider_envelope_digest,
+            } => {
+                evaluate_offer_signature(
+                    context,
+                    provider,
+                    offer_digest,
+                    provider_envelope_digest,
+                    signed_offers,
+                    failures,
+                );
             }
         }
     } else {
         failures.insert(EligibilityFailureV1::ProviderUnknown);
-        if signed_offers.is_some() {
-            failures.insert(EligibilityFailureV1::OfferSignatureInvalid);
-        }
+    }
+}
+
+fn evaluate_offer_signature(
+    context: &RoutingContextV1<'_>,
+    provider: &ProviderIdentityV1,
+    offer_digest: Sha256Digest,
+    provider_envelope_digest: Sha256Digest,
+    signed_offers: Option<&BTreeMap<Sha256Digest, &SignedCapacityOfferV1>>,
+    failures: &mut BTreeSet<EligibilityFailureV1>,
+) {
+    let Some(signed_offers) = signed_offers else {
+        return;
+    };
+    let signature_is_valid = signed_offers
+        .get(&offer_digest)
+        .is_some_and(|signed_offer| {
+            verify_signed_capacity_offer_v1(
+                signed_offer,
+                provider,
+                provider_envelope_digest,
+                context.verification_keys,
+                context.evaluated_at,
+            )
+            .is_ok()
+        });
+    if !signature_is_valid {
+        failures.insert(EligibilityFailureV1::OfferSignatureInvalid);
     }
 }
 
@@ -897,6 +957,12 @@ fn reject_verified_signing_sequence_equivocation(
         if report
             .failures
             .contains(&EligibilityFailureV1::OfferSignatureInvalid)
+            || report
+                .failures
+                .contains(&EligibilityFailureV1::AssuranceEvidenceInvalid)
+            || report
+                .failures
+                .contains(&EligibilityFailureV1::ProviderUnknown)
         {
             continue;
         }
@@ -944,12 +1010,82 @@ fn reject_verified_reliability_sequence_equivocation(
     Ok(())
 }
 
-fn verify_offer_assurance(
+enum OfferAssuranceEvaluation {
+    EvidenceInvalid,
+    PolicyRejected {
+        provider_envelope_digest: Sha256Digest,
+    },
+    Accepted {
+        provider_envelope_digest: Sha256Digest,
+    },
+}
+
+struct VerifiedOfferAssuranceEvidence {
+    provider_envelope_digest: Sha256Digest,
+    provider_digest: Sha256Digest,
+    provider_claim: AssuranceClaimV1,
+    service_claim: AssuranceClaimV1,
+    combined: AssuranceEnvelopeV1,
+}
+
+fn evaluate_offer_assurance(
     context: &RoutingContextV1<'_>,
     provider: &ProviderIdentityV1,
     service_digest: Sha256Digest,
-) -> Result<Sha256Digest, ()> {
-    let provider_digest = provider.digest().map_err(|_| ())?;
+) -> OfferAssuranceEvaluation {
+    let verified = match verify_offer_assurance_evidence(context, provider, service_digest) {
+        Ok(verified) => verified,
+        Err(failure) => return failure,
+    };
+    let mut required = BTreeSet::from([verified.provider_claim, verified.service_claim]);
+    for property in &context.policy.required_assurance_properties {
+        let subject_digest = match property {
+            AssuranceProperty::ProviderAuthorization => verified.provider_digest,
+            AssuranceProperty::ServiceManifestBinding
+            | AssuranceProperty::RuntimeMeasurement
+            | AssuranceProperty::RegionConfinement
+            | AssuranceProperty::NoContentRetentionDeclared
+            | AssuranceProperty::MeteringIntegrity => service_digest,
+            AssuranceProperty::PolicyCompliance => {
+                return OfferAssuranceEvaluation::PolicyRejected {
+                    provider_envelope_digest: verified.provider_envelope_digest,
+                };
+            }
+        };
+        required.insert(AssuranceClaimV1 {
+            subject_digest,
+            property: property.clone(),
+        });
+    }
+    if evaluate_assurance_v1(
+        &verified.combined,
+        &AssuranceAcceptancePolicyV1 {
+            required_guarantees: required,
+            minimum_maturity: context.policy.minimum_assurance_maturity,
+            require_closed_assumptions: true,
+            forbidden_root_classes: BTreeSet::new(),
+            evaluated_at: context.evaluated_at.clone(),
+        },
+    )
+    .is_err()
+    {
+        return OfferAssuranceEvaluation::PolicyRejected {
+            provider_envelope_digest: verified.provider_envelope_digest,
+        };
+    }
+    OfferAssuranceEvaluation::Accepted {
+        provider_envelope_digest: verified.provider_envelope_digest,
+    }
+}
+
+fn verify_offer_assurance_evidence(
+    context: &RoutingContextV1<'_>,
+    provider: &ProviderIdentityV1,
+    service_digest: Sha256Digest,
+) -> Result<VerifiedOfferAssuranceEvidence, OfferAssuranceEvaluation> {
+    let provider_digest = provider
+        .digest()
+        .map_err(|_| OfferAssuranceEvaluation::EvidenceInvalid)?;
     let provider_claim = AssuranceClaimV1 {
         subject_digest: provider_digest,
         property: AssuranceProperty::ProviderAuthorization,
@@ -958,30 +1094,37 @@ fn verify_offer_assurance(
         subject_digest: service_digest,
         property: AssuranceProperty::ServiceManifestBinding,
     };
-    let provider_set = context
+    let Some(provider_set) = context
         .assurance_sets
         .values()
         .find(|set| set.envelope.guarantees.contains(&provider_claim))
-        .ok_or(())?;
-    let offer_set = context
+    else {
+        return Err(OfferAssuranceEvaluation::EvidenceInvalid);
+    };
+    let Some(offer_set) = context
         .assurance_sets
         .values()
         .find(|set| set.envelope.guarantees.contains(&service_claim))
-        .ok_or(())?;
-    verify_assurance_evidence_set_v1(
+    else {
+        return Err(OfferAssuranceEvaluation::EvidenceInvalid);
+    };
+    if verify_assurance_evidence_set_v1(
         provider_set,
         context.assurance_blobs,
         context.verification_keys,
         context.evaluated_at,
     )
-    .map_err(|_| ())?;
-    verify_assurance_evidence_set_v1(
-        offer_set,
-        context.assurance_blobs,
-        context.verification_keys,
-        context.evaluated_at,
-    )
-    .map_err(|_| ())?;
+    .is_err()
+        || verify_assurance_evidence_set_v1(
+            offer_set,
+            context.assurance_blobs,
+            context.verification_keys,
+            context.evaluated_at,
+        )
+        .is_err()
+    {
+        return Err(OfferAssuranceEvaluation::EvidenceInvalid);
+    }
     let provider_statement_is_bound = provider_set.signed_statements.iter().any(|statement| {
         statement.subject_kind.as_str() == "provider-identity"
             && statement.subject_digest == provider_digest
@@ -993,7 +1136,7 @@ fn verify_offer_assurance(
                 == Some(hyperintel_assurance::AssuranceRootClassV1::ProviderKey)
     });
     if !provider_statement_is_bound {
-        return Err(());
+        return Err(OfferAssuranceEvaluation::EvidenceInvalid);
     }
     let service_statement_is_bound = offer_set.signed_statements.iter().any(|statement| {
         statement.subject_kind.as_str() == "service-spec"
@@ -1004,38 +1147,25 @@ fn verify_offer_assurance(
                 == Some(hyperintel_assurance::AssuranceRootClassV1::VerifierKey)
     });
     if !service_statement_is_bound {
-        return Err(());
+        return Err(OfferAssuranceEvaluation::EvidenceInvalid);
     }
+    let provider_envelope_digest = provider_set
+        .envelope
+        .digest()
+        .map_err(|_| OfferAssuranceEvaluation::EvidenceInvalid)?;
     let combined =
-        conjoin_envelopes_v1(&provider_set.envelope, &offer_set.envelope).map_err(|_| ())?;
-    let mut required = BTreeSet::from([provider_claim, service_claim]);
-    for property in &context.policy.required_assurance_properties {
-        let subject_digest = match property {
-            AssuranceProperty::ProviderAuthorization => provider_digest,
-            AssuranceProperty::ServiceManifestBinding
-            | AssuranceProperty::RuntimeMeasurement
-            | AssuranceProperty::RegionConfinement
-            | AssuranceProperty::NoContentRetentionDeclared
-            | AssuranceProperty::MeteringIntegrity => service_digest,
-            AssuranceProperty::PolicyCompliance => return Err(()),
-        };
-        required.insert(AssuranceClaimV1 {
-            subject_digest,
-            property: property.clone(),
-        });
-    }
-    evaluate_assurance_v1(
-        &combined,
-        &AssuranceAcceptancePolicyV1 {
-            required_guarantees: required,
-            minimum_maturity: context.policy.minimum_assurance_maturity,
-            require_closed_assumptions: true,
-            forbidden_root_classes: BTreeSet::new(),
-            evaluated_at: context.evaluated_at.clone(),
-        },
-    )
-    .map_err(|_| ())?;
-    provider_set.envelope.digest().map_err(|_| ())
+        conjoin_envelopes_v1(&provider_set.envelope, &offer_set.envelope).map_err(|_| {
+            OfferAssuranceEvaluation::PolicyRejected {
+                provider_envelope_digest,
+            }
+        })?;
+    Ok(VerifiedOfferAssuranceEvidence {
+        provider_envelope_digest,
+        provider_digest,
+        provider_claim,
+        service_claim,
+        combined,
+    })
 }
 
 pub(crate) fn quote_max_v1(
@@ -1181,6 +1311,75 @@ pub fn validate_route_evaluation_record_v1(
     }
     if route_evaluation_digest(evaluation)? != evaluation.evaluation_digest {
         return Err(RoutingError::RouteEvaluationDigestMismatch);
+    }
+    Ok(())
+}
+
+/// Validate a route evaluation against the exact disclosed capacity offers.
+///
+/// This strict form adds one-to-one offer/report coverage, exact candidate provider bindings, and
+/// deterministic minimum-rank winner selection to the internal record checks. It still does not
+/// reconstruct evidence, signatures, or the truth of an eligibility report.
+///
+/// # Errors
+///
+/// Returns when offer identities are duplicated or differ from the reports, provider bindings
+/// differ, or the selected route is not the deterministic minimum among eligible costed reports.
+pub fn validate_route_evaluation_against_offers_v1(
+    evaluation: &RouteEvaluationRecordV1,
+    offers: &[CapacityOfferV1],
+) -> Result<(), RoutingError> {
+    validate_route_evaluation_record_v1(evaluation)?;
+    let mut offers_by_digest = BTreeMap::new();
+    for offer in offers {
+        let offer_digest = offer.digest()?;
+        if offers_by_digest.insert(offer_digest, offer).is_some() {
+            return Err(RoutingError::DuplicateOffer);
+        }
+    }
+    if offers_by_digest.len() != evaluation.eligibility_reports.len()
+        || evaluation
+            .eligibility_reports
+            .iter()
+            .any(|report| !offers_by_digest.contains_key(&report.offer_digest))
+    {
+        return Err(RoutingError::InvalidRouteEvaluation);
+    }
+
+    if let RouteEvaluationOutcomeV1::Selected(route) = &evaluation.outcome {
+        for candidate in &route.candidates {
+            let offer = offers_by_digest
+                .get(&candidate.offer_digest)
+                .ok_or(RoutingError::InvalidRouteEvaluation)?;
+            if candidate.provider_id != offer.provider_id {
+                return Err(RoutingError::InvalidRouteEvaluation);
+            }
+        }
+        let expected = evaluation
+            .eligibility_reports
+            .iter()
+            .filter_map(|report| {
+                report
+                    .cost
+                    .filter(|_| report.eligible)
+                    .map(|cost| (report, cost))
+            })
+            .min_by_key(|(report, cost)| {
+                let offer = offers_by_digest.get(&report.offer_digest);
+                (
+                    cost.expected_successful_cost,
+                    cost.buyer_quote_max,
+                    offer.map_or(u64::MAX, |value| value.p95_latency_ms),
+                    std::cmp::Reverse(offer.map_or(0, |value| value.success_probability.get())),
+                    report.offer_digest,
+                )
+            })
+            .ok_or(RoutingError::InvalidRouteEvaluation)?;
+        if expected.0.offer_digest != route.selected_offer_digest
+            || expected.1 != route.selected_cost
+        {
+            return Err(RoutingError::InvalidRouteEvaluation);
+        }
     }
     Ok(())
 }

@@ -19,7 +19,7 @@ use crate::{
     SignedReliabilityArtifactV1, SignedRoutingContextV1,
     evaluate_reliability_artifact_verified_route_v1, select_reliability_artifact_verified_route_v1,
     select_route_v1, select_signed_route_v1, validate_metering_receipt_v1,
-    validate_route_evaluation_record_v1, validate_settlement_intent_v1,
+    validate_route_evaluation_against_offers_v1, validate_settlement_intent_v1,
     verify_replay_state_transition_v1, verify_signed_reliability_artifact_v1,
 };
 
@@ -892,7 +892,12 @@ pub fn verify_replay_protected_market_evidence_bundle_v4(
 fn validate_v4_internal_links(
     bundle: &ReplayProtectedMarketEvidenceBundleV4,
 ) -> Result<(), MarketEvidenceError> {
-    validate_route_evaluation_record_v1(&bundle.route_evaluation)?;
+    let offers = bundle
+        .offers
+        .iter()
+        .map(|signed_offer| signed_offer.offer.clone())
+        .collect::<Vec<_>>();
+    validate_route_evaluation_against_offers_v1(&bundle.route_evaluation, &offers)?;
     if bundle.service.digest()? != bundle.route_evaluation.service_spec_digest
         || bundle.policy.digest()? != bundle.route_evaluation.request_policy_digest
         || bundle.policy.replay_snapshot_digest != bundle.route_evaluation.replay_snapshot_digest

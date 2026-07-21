@@ -9,7 +9,8 @@ use data_encoding::HEXLOWER;
 use sha2::{Digest as _, Sha256};
 
 const ROUTING_SOURCE_SHA256: &str =
-    "8dfe783cfd19ab56ee6d5b5c354cbf5d82b02fa035b2b3b18e4714131fdf733d";
+    "814c8d8bd5ee42b0ba1d7c97533f475aac8d8c84bab611163115af02efc6acbe";
+const PINNED_Z3: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tools/pinned-z3");
 const Z3_VERSION: &str = "Z3 version 4.15.0 - 64 bit\n";
 
 #[test]
@@ -19,12 +20,12 @@ fn contract_policy_non_widening_model_is_unsat_and_weakened_replay_is_sat()
     let source_digest = HEXLOWER.encode(&Sha256::digest(routing_source));
     assert_eq!(source_digest, ROUTING_SOURCE_SHA256);
 
-    let version = Command::new("z3").arg("--version").output()?;
+    let version = Command::new(PINNED_Z3).arg("--version").output()?;
     assert!(version.status.success());
     assert!(version.stderr.is_empty());
     assert_eq!(String::from_utf8(version.stdout)?, Z3_VERSION);
 
-    let mut child = Command::new("z3")
+    let mut child = Command::new(PINNED_Z3)
         .args(["-in", "-smt2", "-T:5"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
