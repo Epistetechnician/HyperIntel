@@ -270,6 +270,22 @@ boundaries are inclusive. The success type is opaque and explicitly non-
 authoritative. This is local authorization separation, not process, storage,
 cache, network, encryption-key, or log isolation and not production IAM.
 
+## Local operator-secret injection
+
+`hyperintel-secret-provider` at `22ddd2c` atomically verifies one short-lived
+signed operator authorization and invokes one caller-injected resolver. The
+authorization and result bind the exact runtime, consumer, selected provider,
+immutable `SecretReferenceV1`, provider-API purpose, operation context,
+evaluation time, trust record, revocation state, and rollback checkpoint.
+Preflight failure invokes no resolver; a successful preflight invokes exactly
+once with no retry or fallback.
+
+Returned material is non-cloneable, nonserializable, redacted, bounded, and
+zeroize-on-drop. The crate contains no environment, file, keychain, KMS, cloud,
+or provider adapter; it performs no network request and does not establish the
+authenticity or cleanup behavior of an injected resolver. Possession of a
+successful result may itself confer external capability.
+
 V1, V2, and V3 schemas and reconstruction behavior remain available unchanged,
 with selected-path and rejection/fallback golden commitments enforcing that
 compatibility boundary.

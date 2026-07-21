@@ -169,6 +169,16 @@ state. This establishes local authorization separation only—not identity
 proof, token issuance, durable token consumption, gateway enforcement, runtime
 tenant isolation, or production IAM.
 
+Local operator-secret injection is **Implemented** at `22ddd2c` and locally
+checked by ten direct contracts plus the full repository gate. It verifies one
+short-lived signed authorization under dedicated trust and rollback-pinned
+revocation, then invokes one injected resolver with exact runtime, consumer,
+selected-provider, immutable-reference, purpose, and operation bindings.
+Returned material is bounded, redacted, nonserializable, and zeroize-on-drop.
+This is an in-process seam only—not an ambient credential source, real
+provider/KMS adapter, network path, deployment, or production credential
+acceptance.
+
 R1 remains open. The local store is not rollback-resistant, replicated,
 tenant-isolated, encrypted by this crate, backed up, independently anchored, or
 production operated. The harness is not an HTTP gateway, external provider

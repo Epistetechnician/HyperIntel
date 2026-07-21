@@ -218,17 +218,19 @@ credential, opens no filesystem, database, or socket, contacts no provider,
 consumes no durable replay state, releases no request, and grants no
 settlement, custody, funds, production-IAM, or production authority.
 
-Queued after tenant IAM is `hyperintel-local-secret-injection-v1`. It may reuse
-only the existing canonical JSON, strict identity/time/digest, Ed25519,
+`22ddd2c` adds `hyperintel-local-secret-injection-v1`. It reuses only the
+repository's canonical JSON, strict identity/time/digest, Ed25519,
 fail-closed verification, opaque-result, runtime-config secret-reference, and
-dependency-injection patterns. It must use new dedicated operator-secret trust
-and may not reuse tenant-IAM, buyer-policy, provider-receipt, assurance,
-wallet, or settlement authority. Only hermetic fixture resolution and
-synthetic bytes are authorized in normal tests. No source code, ambient
-credential adapter, environment/file/keychain access, network, KMS/HSM/cloud
-secret manager, provider call, cache, retry, fallback, persistence, logging,
-funds, deployment, production credential, or production authority may be
-added.
+dependency-injection patterns; no source code was copied. New dedicated
+operator-secret trust authorizes one exact runtime, consumer, selected
+provider, immutable reference, provider-API purpose, and operation context
+under signed freshness-bounded revocation and a caller-pinned checkpoint. One
+injected resolver call returns bounded, redacted, nonserializable,
+zeroize-on-drop material. Hermetic tests use synthetic bytes only. The slice
+adds no ambient credential adapter, environment/file/keychain access, network,
+KMS/HSM/cloud secret manager, provider call, cache, retry, fallback,
+persistence, logging, funds, deployment, production credential, or production
+authority.
 
 ## Licensing boundary
 

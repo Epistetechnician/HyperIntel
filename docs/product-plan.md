@@ -148,6 +148,14 @@ This is authorization separation only; token issuance, real identity, replay
 consumption, gateway enforcement, runtime tenant isolation, and production IAM
 remain open.
 
+The local secret-injection seam at `22ddd2c` closes only the atomic
+authorization-to-injected-resolution shape. Dedicated signed operator trust,
+fresh rollback-pinned revocation, and exact runtime, consumer, selected
+provider, immutable reference, purpose, and operation bindings precede one
+resolver invocation. Material is bounded, redacted, nonserializable, and
+zeroize-on-drop. No ambient credential source, real adapter, network request,
+cache, retry, deployment, or production credential authority is present.
+
 ## System boundary
 
 The marketplace is split so no component receives authority merely because it

@@ -47,6 +47,15 @@ and signed rollback-pinned revocation evidence are checked as pure data. No
 process, filesystem, database row, cache, network, encryption-key, or log
 partition is implemented or claimed.
 
+The local secret-injection seam at `22ddd2c` moves resolver-returned bytes into
+bounded, non-cloneable, nonserializable, redacted zeroize-on-drop storage after
+an exact signed operator authorization. Constructor rejection, returned-
+metadata mismatch, signed-limit mismatch, explicit zeroization, and successful
+result drop are crate-owned cleanup paths. Resolver errors return no material
+to the crate, so their cleanup remains resolver-owned. No ambient credential
+source or real adapter exists; a successful material-bearing result may itself
+confer external capability.
+
 ## Custody posture
 
 The target design avoids custody of provider API credentials and minimizes

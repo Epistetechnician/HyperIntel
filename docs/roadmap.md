@@ -103,6 +103,14 @@ local authorization separation only. Token issuance, durable token replay
 prevention, gateway enforcement, runtime tenant isolation, and production IAM
 remain open.
 
+The local secret-injection seam landed at `22ddd2c`: dedicated signed
+operator-secret trust, exact runtime/consumer/provider/reference/purpose/
+operation binding, freshness-bounded revocation and rollback checkpoint, one
+injected resolver invocation, and bounded redacted zeroize-on-drop material.
+It has no ambient source, real resolver adapter, network, provider call, cache,
+retry, fallback, persistence, deployment, or production credential authority.
+The gateway and external provider transport remain open.
+
 ## R2: HyperEVM testnet
 
 Future contracts: provider registry, buyer session escrow, cumulative vouchers,

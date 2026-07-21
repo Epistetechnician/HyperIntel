@@ -49,6 +49,9 @@ The current repository implements a **local hermetic foundation only**:
   short-lived signed grants, exact caller-owned resource and operation
   bindings, purpose-separated tenant IAM keys, and signed rollback-pinned
   revocation evidence;
+- atomic local operator-secret authorization and injected resolution with
+  dedicated trust, exact runtime/provider/reference/purpose bindings, one
+  resolver call, and bounded redacted zeroize-on-drop material;
 - an offline-verifiable V1–V4 fixture corpus exercised through the real CLI
   process; and
 - a source-hash-bound, two-candidate Z3 policy-non-widening check.
@@ -134,6 +137,12 @@ Exact source mappings and exclusions are recorded in
   tenant-namespaced Ed25519 trust, fixed roles and actions, exact resource
   ownership, 300-second grants, and signed freshness-bounded revocation
   snapshots. It issues no token and provides no runtime tenant isolation.
+- `hyperintel-secret-provider`: signed short-lived operator-secret
+  authorization, dedicated trust and rollback-pinned revocation, exact
+  runtime/consumer/provider/reference/purpose binding, and one injected local
+  resolution call returning bounded redacted zeroize-on-drop material. It has
+  no ambient credential source, network adapter, cache, retry, or external
+  effect.
 - `hyperintel-cli`: offline JSON bundle verifier; its only external effect is
   reading caller-selected evidence and trusted-key files and writing the verdict
   to stdout. It dispatches only explicit V1/V2/V3/V4 bundle schema identifiers.

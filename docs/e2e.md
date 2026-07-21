@@ -9,8 +9,9 @@ process gate is environment-pinned to Z3 4.15.0. Its R1 work is limited to
 authenticated records, a local replay database, one hermetic in-process
 execution harness, authenticated reroute lineage, and a separate metadata-only
 execution journal plus pure-data receipt reconciliation and strict local
-runtime configuration plus pure-data tenant authorization separation; it has
-no HTTP gateway, external provider runtime, or external authority.
+runtime configuration, pure-data tenant authorization separation, and a local
+injected operator-secret resolution seam; it has no HTTP gateway, external
+provider runtime, ambient credential adapter, or external effect.
 
 Implemented now:
 
@@ -61,6 +62,10 @@ Implemented now:
 - one-action, maximum-300-second tenant access grants bound to caller-owned
   policy, runtime, audience, resource ownership, and operation context, with
   dedicated IAM keys and signed rollback-pinned revocation snapshots;
+- one atomic signed operator-secret authorization and injected local
+  resolution call bound to the exact runtime, consumer, selected provider,
+  immutable secret reference, purpose, operation, trust, and revocation
+  checkpoint, returning only bounded redacted zeroize-on-drop material;
 - committed V1–V4 fixtures exercised through the compiled CLI process,
   including caller-trust and fail-closed boundary cases; and
 - a source-hash-bound Z3 4.15.0 two-candidate policy-non-widening check whose
@@ -841,6 +846,17 @@ record and rollback checkpoint. It issues no token, authenticates no real
 person or organization, consumes no grant, and enforces no runtime or storage
 isolation. It does not satisfy the private-alpha tenant-isolation or production-
 IAM gate by itself.
+
+The local secret-injection slice at `22ddd2c` verifies one short-lived signed
+operator authorization and invokes one injected in-process resolver with exact
+runtime, consumer, selected-provider, immutable-reference, purpose, operation,
+trust-record, revocation-state, and checkpoint bindings. Preflight failures
+invoke no resolver; success invokes it exactly once with no retry or fallback.
+Returned bytes are bounded, non-cloneable, nonserializable, redacted, and
+zeroize-on-drop. The slice includes no ambient source or real resolver adapter,
+performs no network or provider call, and grants no deployment or production
+credential authority; it does not satisfy the private-alpha provider-runtime
+gate by itself.
 
 ## 19. First 12 weeks
 
