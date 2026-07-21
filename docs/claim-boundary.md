@@ -55,6 +55,16 @@ same-provider reuse, prompt changes, stale replay lineage, and time regression
 before invoking the next provider. It does not select a route, operate a buyer
 signing key, or establish live failover.
 
+The durable execution journal adds one local crash-classification claim. Its
+metadata-only SQLite starts and terminals are immutable under exact identity,
+concurrent exact retries are idempotent, and public recovery queries the actual
+durable replay store before distinguishing an unconsumed start from a consumed
+admission without a terminal. Existing starts never authorize implicit resume,
+and cross-row, cross-store, timestamp, or identity mismatch fails closed. The
+journal does not make its database atomic with replay consumption; a
+consumed-without-terminal state requires a new authenticated nonce or explicit
+operator reconciliation.
+
 ## Unsupported claims
 
 The repository does not establish:
@@ -76,6 +86,9 @@ The repository does not establish:
 - full OpenAI API compatibility, an HTTP gateway, external provider transport,
   live cancellation propagation, automatic route selection/failover, provider
   health, or production provider-agent operation;
+- atomic commit across replay and execution-journal databases, automatic crash
+  replay or resume, rollback resistance, remote journal replication, prompt or
+  response retention, or production recovery operations;
 - truth, completeness, representative sampling, independence, or provenance of
   the source observations committed by a V3 reliability artifact;
 - calibration, stationarity, causal validity, or future predictive accuracy of

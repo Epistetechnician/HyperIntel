@@ -123,6 +123,16 @@ Cancellation, partial output, same-provider reuse, changed prompt, and stale
 lineage fail before invocation. The slice does not discover the next provider,
 sign the policy, monitor health, or operate live transport.
 
+The metadata-only execution journal at `6a2d9d5` closes the next local crash
+inspection dependency. It serializes exact start and terminal writes, binds
+terminal and recovery decisions to the actual replay database, rejects
+implicit resume from an existing start, and exposes consumed-without-terminal
+as a non-retriable state. It retains only canonical identities and timestamps,
+never prompt or response bodies. Because replay and journal writes remain
+separate SQLite transactions, this is fail-closed recovery classification, not
+cross-database atomicity, automatic retry, production backup, or operator
+reconciliation automation.
+
 ## System boundary
 
 The marketplace is split so no component receives authority merely because it

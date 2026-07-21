@@ -88,6 +88,11 @@ tested before funds are enabled.
   failure with zero released chunks and a separately signed, next-nonce route
   to a different provider. Partial output, cancellation, deadline, and signer
   failure remain non-reroutable. Live policy and transport remain future work.
+- Local process crash: inspect the metadata-only execution journal against the
+  actual durable replay store. An existing start never implicitly resumes, and
+  consumed-without-terminal requires a new authenticated nonce or explicit
+  operator reconciliation. The two SQLite databases are not atomically
+  committed together.
 - Metering disagreement: withhold disputed delta, preserve evidence, and apply
   the bounded dispute contract.
 - Chain or RPC unavailability: inference may continue only within a buyer's

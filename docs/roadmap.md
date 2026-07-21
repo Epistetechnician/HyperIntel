@@ -70,6 +70,14 @@ Cancellation/partial output, same-provider reuse, prompt change, and stale
 lineage are rejected. Route selection, policy signing, live failover, health,
 and transport remain future work.
 
+The metadata-only execution journal landed at `6a2d9d5`: separate SQLite start
+and terminal records, serialized exact retries, conflict and tamper rejection,
+actual replay-store-bound recovery, no implicit resume, and restart coverage
+for consumed-without-terminal crash states. It stores no prompt or response
+body. Replay and journal writes are not one atomic transaction; reconciliation,
+rollback resistance, replication, production backup, and automatic recovery
+remain future operations work.
+
 ## R2: HyperEVM testnet
 
 Future contracts: provider registry, buyer session escrow, cumulative vouchers,

@@ -136,6 +136,13 @@ beta failure at nonce 1 to alpha completion at nonce 2. Cancellation/partial
 output, same-provider reuse, changed prompt, and stale lineage fail before the
 next provider is invoked.
 
+The metadata-only execution journal is **Implemented** at `6a2d9d5` and locally
+checked by concurrent exact-retry, conflict, close/reopen, no-content,
+pre-existing-consumption, consumed-without-terminal, actual replay-store
+binding, and cross-row/cross-store/timestamp tamper contracts plus the full
+repository gate. Existing starts do not authorize implicit execution. The
+journal persists no prompt or response body and grants no authority.
+
 R1 remains open. The local store is not rollback-resistant, replicated,
 tenant-isolated, encrypted by this crate, backed up, independently anchored, or
 production operated. The harness is not an HTTP gateway, external provider
@@ -145,6 +152,8 @@ the next route. No production IAM, tenant isolation, external
 receipt reconciliation, sustained two-provider traffic, incident runbook,
 synthetic no-funds soak, independent reproduction, or private-alpha operator
 acceptance has been implemented or exercised.
+The replay and journal databases also have no cross-database atomic commit,
+automatic crash resume, or production reconciliation workflow.
 
 ## Change control
 

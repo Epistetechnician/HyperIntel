@@ -6,8 +6,9 @@ This document is the end-to-end target architecture, not a completion claim.
 The current repository completes the documented local, pure-data R0
 implementation target. Its protocol fixtures are hermetic; its separate formal
 process gate is environment-pinned to Z3 4.15.0. Its R1 work is limited to
-authenticated records, a local replay database, and one hermetic in-process
-execution harness; it has no HTTP gateway, external provider runtime, or
+authenticated records, a local replay database, one hermetic in-process
+execution harness, authenticated reroute lineage, and a separate metadata-only
+execution journal; it has no HTTP gateway, external provider runtime, or
 external authority.
 
 Implemented now:
@@ -45,6 +46,10 @@ Implemented now:
   provider-`UNAVAILABLE` attempt to a caller-supplied, buyer-signed next-nonce
   admission for the same buyer, service, and prompt and a different selected
   provider;
+- a metadata-only SQLite execution journal with serialized exact starts and
+  terminals, actual replay-store-bound restart classification, conflict and
+  tamper rejection, no implicit resume, and explicit consumed-without-terminal
+  recovery state;
 - committed V1–V4 fixtures exercised through the compiled CLI process,
   including caller-trust and fail-closed boundary cases; and
 - a source-hash-bound Z3 4.15.0 two-candidate policy-non-widening check whose
@@ -54,8 +59,8 @@ Still absent: verification of the underlying reliability source observations,
 rollback-resistant or independently anchored replay state, remote replication,
 tenant isolation, production backup and database operations, HTTP gateway,
 external provider runtime, network transport, live streaming or cancellation,
-health and automatic route selection/failover, execution-session persistence,
-contracts,
+health and automatic route selection/failover, response-bearing execution-
+session persistence, cross-database atomicity, contracts,
 custody, funds, external settlement, independent reproduction, and production
 authority. The implemented first R1 tracer is a
 pure-data buyer-policy signature, selected-route admission, and provider-signed
@@ -63,8 +68,9 @@ completed-execution receipt that reconstructs metering without granting
 execution authority. The separate local harness adds deterministic in-process
 request release and partial-stream evidence only after a new durable consume;
 it adds no external execution or settlement authority. Partial-output
-economics, live cancellation, automatic reroute, execution-session
-persistence, and external settlement remain outside the implemented slices.
+economics, live cancellation, automatic reroute, response-bearing session
+persistence, automated reconciliation, and external settlement remain outside
+the implemented slices.
 V1, V2, and V3
 are retained for compatibility, keep their narrower explicit nonclaims and
 historical collapsed assurance-rejection profile, and are covered by exact
@@ -790,6 +796,16 @@ The authenticated reroute slice at `379ee98` locally exercises the required
 new-admission rule for a zero-output unavailable provider. It does not turn the
 harness into a health system or automatic failover service and does not satisfy
 the private-alpha gate by itself.
+
+The metadata-only execution journal at `6a2d9d5` records canonical starts and
+terminals around the harness and queries the durable replay store for restart
+classification. Concurrent exact retries are idempotent; conflicting reuse,
+false replay absence, cross-row/store mismatch, timestamp regression, and
+implicit resume fail closed. A consumed admission with no terminal is
+non-retriable. Because journal and replay writes remain separate SQLite
+transactions, this adds crash inspection rather than atomic execution-session
+commit or production recovery, and it does not satisfy the private-alpha gate
+by itself.
 
 ## 19. First 12 weeks
 

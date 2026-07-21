@@ -168,15 +168,18 @@ repository code. It adds no route selection, buyer signing authority, HTTP or
 provider transport, health monitor, credential custody, settlement, funds, or
 production authority.
 
-The next authorized local R1 slice is
-`hyperintel-durable-execution-journal-v1`. It may reuse the existing local SQLx
-and checksum patterns to create a separate metadata-only SQLite journal around
-the hermetic harness. It may not change the replay schema or copy additional
-source code. Implementation lineage will be recorded only after restart,
-idempotency, conflict, no-content, and consumed-without-terminal contracts plus
-the full repository gate pass. The authorization creates no cross-database
-atomicity claim, prompt/response retention, network, credentials, settlement,
-funds, or production authority.
+`6a2d9d5` adds `hyperintel-durable-execution-journal-v1`. It reuses the existing
+local SQLx and checksum patterns in a separate metadata-only SQLite journal
+around the hermetic harness without changing the replay schema or copying
+additional source code. Contracts cover concurrent exact-retry idempotency,
+same-admission start and terminal conflicts, close/reopen, no-content records,
+pre-existing consumption, consumed-without-terminal recovery, actual replay-
+store binding, and cross-row, cross-store, and timestamp tampering.
+
+The implementation creates no cross-database atomicity claim. Existing starts
+and consumed-without-terminal states fail closed rather than implicitly
+resuming. It adds no prompt/response retention, network, credentials,
+settlement, funds, or production authority.
 
 ## Licensing boundary
 

@@ -15,9 +15,11 @@ HyperIntel separates five planes:
    hedge, never inference delivery.
 
 The current implementation covers pure-data portions of planes 1–4 plus one
-in-process execution harness backed by the local replay store. It verifies and
-consumes an admission before invoking an injected scripted provider. It does
-not run or authorize a networked or production execution runtime.
+in-process execution harness backed by the local replay store and a separate
+metadata-only execution journal. It verifies and consumes an admission before
+invoking an injected scripted provider, and it can classify local crash states
+without retaining request or response bodies. It does not run or authorize a
+networked or production execution runtime.
 
 ## First vertical slice
 
@@ -182,6 +184,33 @@ prompt change, and stale lineage do not qualify. The code neither selects the
 fallback route nor signs the next policy. Automatic/live failover, provider
 health, and external transport remain unimplemented.
 
+## Durable execution journal
+
+`hyperintel-execution-journal` at `6a2d9d5` adds a separate operator-selected
+SQLite database for canonical start and terminal identities. Start and
+terminal compare-and-insert operations use `BEGIN IMMEDIATE`; concurrent exact
+retries return an idempotent result and same-admission semantic conflicts fail
+closed. Terminal writes and public restart inspection query the actual durable
+replay store and bind admission, buyer, replay-consumption digest, start digest,
+and non-regressing time.
+
+The integrated wrapper writes a new start, rejects any existing start rather
+than implicitly resuming it, checks durable consumption before provider
+invocation, runs the existing hermetic harness, and retains a closed terminal
+identity. A pre-existing or concurrently detected consumption without a
+terminal is non-retriable. Recovery distinguishes not-started,
+consumed-without-start, started-not-consumed, consumed-without-terminal, and
+terminal states. Cross-row, cross-store, digest, and timestamp tampering fails
+closed.
+
+The journal stores metadata only: no prompt or response bodies, credentials,
+keys, arbitrary error text, or settlement authority. The journal and replay
+store remain two local databases with no atomic transaction across them. A
+consumed-without-terminal result requires a new authenticated nonce or explicit
+operator reconciliation; the code supplies no automatic resume, rollback
+resistance, remote replication, network transport, funds, or production
+authority.
+
 V1, V2, and V3 schemas and reconstruction behavior remain available unchanged,
 with selected-path and rejection/fallback golden commitments enforcing that
 compatibility boundary.
@@ -209,7 +238,7 @@ that a cheaper offer can offset.
   its installed binary provenance is an environment assumption. It is not a
   runtime dependency or an authority source.
 - SQLx 0.8.6, SQLite, the local filesystem, and operator path selection for the
-  separately scoped durable replay store.
+  separately scoped durable replay store and metadata-only execution journal.
 - Caller-injected local provider and receipt-signer implementations for the
   hermetic execution harness. Test signers are fixtures, not production key
   custody or signing authority.
@@ -227,6 +256,9 @@ hyperintel-core <- hyperintel-assurance <- hyperintel-market <- hyperintel-cli
                                                     ^
                                                     |
                                         hyperintel-execution
+                                                    ^
+                                                    |
+                                hyperintel-execution-journal
 ```
 
 `AssuranceEvidenceSetV1` is generic and contains no market-derived records.

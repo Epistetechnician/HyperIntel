@@ -34,6 +34,10 @@ The current repository implements a **local hermetic foundation only**:
   `UNAVAILABLE` attempt and a caller-supplied, buyer-signed next-nonce
   admission for the same buyer, service, and prompt but a different selected
   provider, then executes that admission through the same local harness;
+- a separate metadata-only SQLite execution journal that records canonical
+  starts and terminals, queries the durable replay store during recovery,
+  rejects implicit resume, and classifies non-retriable consumed-without-
+  terminal crash states without retaining prompts or responses;
 - an offline-verifiable V1–V4 fixture corpus exercised through the real CLI
   process; and
 - a source-hash-bound, two-candidate Z3 policy-non-widening check.
@@ -59,6 +63,11 @@ provider authority and does not prevent an operator from restoring an older
 database artifact. Reliability verification does not prove that source
 observations are true, representative, independently reproduced, calibrated,
 stationary, or predictive of future provider performance.
+The execution journal and replay store are separate SQLite databases: their
+individual writes are durable and validated, but no cross-database atomicity is
+claimed. An interrupted consumed admission without a matching terminal fails
+closed and requires a new authenticated nonce or explicit operator
+reconciliation.
 
 ## Repository lineage
 
@@ -93,6 +102,11 @@ Exact source mappings and exclusions are recorded in
   injected provider and receipt-signer ports, completed receipt verification,
   metering reconstruction, and non-authoritative settlement-intent derivation.
   It opens no socket and reads no credential or environment secret.
+- `hyperintel-execution-journal`: metadata-only local SQLite starts and
+  terminals, serialized exact-retry idempotency, replay-store-bound restart
+  classification, tamper detection, and a fail-closed wrapper around the
+  hermetic harness. It stores no prompt, response, credential, key, arbitrary
+  error text, or settlement authority.
 - `hyperintel-cli`: offline JSON bundle verifier; its only external effect is
   reading caller-selected evidence and trusted-key files and writing the verdict
   to stdout. It dispatches only explicit V1/V2/V3/V4 bundle schema identifiers.
