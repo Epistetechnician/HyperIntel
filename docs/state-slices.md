@@ -85,6 +85,26 @@ socket, HTTP server, external provider call, ambient credential, environment
 secret, tool call, image or audio request, live cancellation propagation,
 automatic reroute, settlement submission, custody, funds, or value movement.
 
+## `hyperintel-authenticated-reroute-v1`
+
+`crates/hyperintel-execution/src/reroute.rs`, its module declaration and public
+exports in `crates/hyperintel-execution/src/lib.rs`, direct reroute contract
+coverage in `crates/hyperintel-execution/tests/authenticated_reroute.rs`, and
+the focused-test command in `package.json`: verification and execution of one
+caller-supplied reroute admission after a prior local provider-unavailable
+attempt. The prior attempt must be self-consistent, have status
+`PROVIDER_FAILED`, carry the closed `UNAVAILABLE` error, and have released no
+chunks. The next authenticated admission must keep the same buyer, service,
+and prompt commitment; begin from the prior consumption's exact after-state;
+consume the next sequential nonce; select a different provider; and not precede
+the prior terminal time. Only then may the existing local harness consume and
+invoke the caller-supplied next provider. This slice may emit a self-digested,
+non-authoritative reroute-lineage record. It does not select a route, construct
+or sign buyer policy, retry an admission, reroute partial output, treat user
+cancellation as failure, open a socket, contact an external provider, read a
+credential, submit settlement, hold custody, move funds, or grant production
+authority.
+
 ## Reserved future slices
 
 The following names reserve no implementation authority:
