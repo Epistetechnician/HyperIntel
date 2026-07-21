@@ -21,6 +21,7 @@ const ACCESS_GRANT_STATEMENT_DOMAIN_V1: &str = "hyperintel.tenant-access-grant-s
 const ACCESS_GRANT_DIGEST_DOMAIN_V1: &str = "hyperintel.tenant-access-grant-digest.v1";
 const REVOCATION_STATEMENT_DOMAIN_V1: &str = "hyperintel.tenant-revocation-snapshot-statement.v1";
 const REVOCATION_DIGEST_DOMAIN_V1: &str = "hyperintel.tenant-revocation-snapshot-digest.v1";
+const IAM_KEY_RECORD_DIGEST_DOMAIN_V1: &str = "hyperintel.tenant-iam-key-record.v1";
 
 /// Closed purpose for a tenant IAM verification key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -416,6 +417,8 @@ pub struct ValidatedTenantRevocationSnapshotV1 {
     snapshot: TenantRevocationSnapshotV1,
     snapshot_digest: Sha256Digest,
     evaluated_at: UtcTimestamp,
+    signer_key_id: ProtocolId,
+    signer_key_record_digest: Sha256Digest,
 }
 
 impl ValidatedTenantRevocationSnapshotV1 {
@@ -497,6 +500,7 @@ pub fn verify_tenant_revocation_snapshot_v1(
             TenantIamKeyPurposeV1::RevocationSnapshot,
         )
         .ok_or(TenantIamError::UnknownKey)?;
+    let signer_key_record_digest = domain_separated_digest(IAM_KEY_RECORD_DIGEST_DOMAIN_V1, key)?;
     verify_key_window(
         key,
         &snapshot.issued_at,
@@ -521,6 +525,8 @@ pub fn verify_tenant_revocation_snapshot_v1(
         snapshot: snapshot.clone(),
         snapshot_digest,
         evaluated_at: context.evaluated_at.clone(),
+        signer_key_id: signed.key_id.clone(),
+        signer_key_record_digest,
     })
 }
 
@@ -555,6 +561,8 @@ pub struct TenantAccessVerificationContextV1<'a> {
     pub key_registry: &'a TenantIamKeyRegistryV1,
     /// Authenticated current revocation evidence.
     pub revocation_snapshot: &'a ValidatedTenantRevocationSnapshotV1,
+    /// Current caller-pinned revocation rollback checkpoint.
+    pub revocation_checkpoint: &'a TenantRevocationCheckpointV1,
     /// Exact expected operation context.
     pub expectation: &'a TenantAccessExpectationV1,
     /// Explicit caller-supplied evaluation time.
@@ -844,16 +852,51 @@ fn validate_access_revocation_context<'a>(
     context: &'a TenantAccessVerificationContextV1<'_>,
 ) -> Result<&'a TenantRevocationSnapshotV1, TenantIamError> {
     let revocations = context.revocation_snapshot.snapshot();
+    let checkpoint = context.revocation_checkpoint;
     if revocations.tenant_id != claims.tenant_id
         || revocations.issuer_id != claims.issuer_id
         || revocations.audience != claims.audience
         || revocations.runtime_configuration_digest != claims.runtime_configuration_digest
         || context.evaluated_at != &context.revocation_snapshot.evaluated_at
+        || checkpoint.tenant_id != revocations.tenant_id
+        || checkpoint.issuer_id != revocations.issuer_id
+        || checkpoint.audience != revocations.audience
+        || checkpoint.runtime_configuration_digest != revocations.runtime_configuration_digest
         || context.evaluated_at < &revocations.effective_at
         || context.evaluated_at > &revocations.expires_at
     {
         return Err(TenantIamError::ExpectationMismatch);
     }
+    if checkpoint.minimum_sequence == 0 || checkpoint.digest_at_minimum_sequence.is_zero() {
+        return Err(TenantIamError::ZeroDigest);
+    }
+    if revocations.sequence < checkpoint.minimum_sequence {
+        return Err(TenantIamError::RevocationRollback);
+    }
+    if revocations.sequence == checkpoint.minimum_sequence
+        && context.revocation_snapshot.snapshot_digest != checkpoint.digest_at_minimum_sequence
+    {
+        return Err(TenantIamError::RevocationFork);
+    }
+    let key = context
+        .key_registry
+        .get(
+            &revocations.tenant_id,
+            &revocations.issuer_id,
+            &context.revocation_snapshot.signer_key_id,
+            TenantIamKeyPurposeV1::RevocationSnapshot,
+        )
+        .ok_or(TenantIamError::UnknownKey)?;
+    let key_digest = domain_separated_digest(IAM_KEY_RECORD_DIGEST_DOMAIN_V1, key)?;
+    if key_digest != context.revocation_snapshot.signer_key_record_digest {
+        return Err(TenantIamError::ExpectationMismatch);
+    }
+    verify_key_window(
+        key,
+        &revocations.issued_at,
+        &revocations.expires_at,
+        context.evaluated_at,
+    )?;
     Ok(revocations)
 }
 

@@ -28,6 +28,7 @@ struct Fixture {
     keys: TenantIamKeyRegistryV1,
     signed_revocations: SignedTenantRevocationSnapshotV1,
     revocations: ValidatedTenantRevocationSnapshotV1,
+    revocation_checkpoint: TenantRevocationCheckpointV1,
     grant: SignedTenantAccessGrantV1,
     expectation: TenantAccessExpectationV1,
     evaluated_at: UtcTimestamp,
@@ -128,6 +129,11 @@ fn contract_key_purpose_namespace_duplicate_and_validity_are_fail_closed() -> Te
     )?;
     let mut registry = TenantIamKeyRegistryV1::default();
     registry.register(access_key.clone())?;
+    registry.register(registered_key(
+        &fixture.revocation_signer,
+        TenantIamKeyPurposeV1::RevocationSnapshot,
+        "key:revocation",
+    )?)?;
     let attacker = SigningKey::from_bytes(&[9; 32]);
     let mut replacement = access_key;
     replacement.public_key_hex = HEXLOWER.encode(attacker.verifying_key().as_bytes());
@@ -147,6 +153,11 @@ fn contract_key_purpose_namespace_duplicate_and_validity_are_fail_closed() -> Te
         TenantIamKeyPurposeV1::RevocationSnapshot,
         "key:access",
     )?)?;
+    purpose_only.register(registered_key(
+        &fixture.revocation_signer,
+        TenantIamKeyPurposeV1::RevocationSnapshot,
+        "key:revocation",
+    )?)?;
     let context = TenantAccessVerificationContextV1 {
         key_registry: &purpose_only,
         ..access_context(&fixture)
@@ -164,6 +175,11 @@ fn contract_key_purpose_namespace_duplicate_and_validity_are_fail_closed() -> Te
     )?;
     key.tenant_id = id("tenant:beta")?;
     other_tenant.register(key)?;
+    other_tenant.register(registered_key(
+        &fixture.revocation_signer,
+        TenantIamKeyPurposeV1::RevocationSnapshot,
+        "key:revocation",
+    )?)?;
     let context = TenantAccessVerificationContextV1 {
         key_registry: &other_tenant,
         ..access_context(&fixture)
@@ -371,6 +387,43 @@ fn contract_key_revocation_and_future_revocation_use_inclusive_time() -> TestRes
 }
 
 #[test]
+fn contract_validated_revocation_rejects_registry_substitution_and_checkpoint_advance() -> TestResult
+{
+    let fixture = fixture()?;
+    let substitute_revocation_signer = SigningKey::from_bytes(&[10; 32]);
+    let mut substitute_registry = TenantIamKeyRegistryV1::default();
+    substitute_registry.register(registered_key(
+        &fixture.access_signer,
+        TenantIamKeyPurposeV1::AccessGrant,
+        "key:access",
+    )?)?;
+    substitute_registry.register(registered_key(
+        &substitute_revocation_signer,
+        TenantIamKeyPurposeV1::RevocationSnapshot,
+        "key:revocation",
+    )?)?;
+    let substituted = TenantAccessVerificationContextV1 {
+        key_registry: &substitute_registry,
+        ..access_context(&fixture)
+    };
+    assert!(matches!(
+        verify_tenant_access_grant_v1(&fixture.grant, &substituted),
+        Err(TenantIamError::ExpectationMismatch)
+    ));
+
+    let advanced_checkpoint = checkpoint(2, digest(88))?;
+    let advanced = TenantAccessVerificationContextV1 {
+        revocation_checkpoint: &advanced_checkpoint,
+        ..access_context(&fixture)
+    };
+    assert!(matches!(
+        verify_tenant_access_grant_v1(&fixture.grant, &advanced),
+        Err(TenantIamError::RevocationRollback)
+    ));
+    Ok(())
+}
+
+#[test]
 fn contract_snapshot_order_duplicates_schemas_and_unknown_fields_fail_closed() -> TestResult {
     let fixture = fixture()?;
     let mut duplicate = fixture.iam.snapshot().clone();
@@ -468,6 +521,7 @@ fn fixture() -> TestResult<Fixture> {
     let evaluated_at = time("2026-07-21T10:03:00Z")?;
     let mut signed_revocations = unsigned_revocations()?;
     resign_revocations(&mut signed_revocations, &revocation_signer)?;
+    let revocation_checkpoint = checkpoint(1, signed_revocations.digest()?)?;
     let revocations = validate_revocations(
         &signed_revocations,
         &keys,
@@ -497,6 +551,7 @@ fn fixture() -> TestResult<Fixture> {
         keys,
         signed_revocations,
         revocations,
+        revocation_checkpoint,
         grant,
         expectation,
         evaluated_at,
@@ -607,6 +662,7 @@ fn access_context(fixture: &Fixture) -> TenantAccessVerificationContextV1<'_> {
         iam_snapshot: &fixture.iam,
         key_registry: &fixture.keys,
         revocation_snapshot: &fixture.revocations,
+        revocation_checkpoint: &fixture.revocation_checkpoint,
         expectation: &fixture.expectation,
         evaluated_at: &fixture.evaluated_at,
     }
