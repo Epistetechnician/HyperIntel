@@ -4,6 +4,7 @@
 //! what a future operator should do; it cannot execute inference or settlement.
 
 mod evidence;
+mod execution;
 mod metering;
 mod offer_admission;
 mod reliability;
@@ -19,6 +20,15 @@ pub use evidence::{
     verify_market_evidence_bundle_v1,
     verify_reliability_artifact_verified_market_evidence_bundle_v3,
     verify_replay_protected_market_evidence_bundle_v4, verify_signed_market_evidence_bundle_v2,
+};
+pub use execution::{
+    AUTHENTICATED_EXECUTION_STATE_SLICE_V1, AuthenticatedExecutionAdmissionV1,
+    AuthenticatedExecutionContextV1, BuyerPolicyStatementV1, ExecutionEvidenceError,
+    ProviderExecutionReceiptDraftV1, ProviderExecutionReceiptV1, ProviderExecutionStatementV1,
+    SignedInferenceRequestPolicyV1, SignedProviderExecutionReceiptV1,
+    build_authenticated_execution_admission_v1, build_metering_from_verified_execution_receipt_v1,
+    build_provider_execution_receipt_v1, verify_authenticated_execution_admission_v1,
+    verify_signed_inference_request_policy_v1, verify_signed_provider_execution_receipt_v1,
 };
 pub use metering::{
     ExecutionStatusV1, MeteringError, MeteringReceiptDraftV1, MeteringReceiptV1,

@@ -17,24 +17,31 @@ use hyperintel_core::{
     UtcTimestamp,
 };
 use hyperintel_market::{
-    BuyerReplayStateV1, EligibilityFailureV1, ExecutionStatusV1, MarketEvidenceBundleV1,
-    MeteringReceiptDraftV1, ReliabilityArtifactDraftV1, ReliabilityArtifactError,
+    AuthenticatedExecutionAdmissionV1, AuthenticatedExecutionContextV1, BuyerPolicyStatementV1,
+    BuyerReplayStateV1, EligibilityFailureV1, ExecutionEvidenceError, ExecutionStatusV1,
+    MarketEvidenceBundleV1, MeteringReceiptDraftV1, ProviderExecutionReceiptDraftV1,
+    ProviderExecutionStatementV1, ReliabilityArtifactDraftV1, ReliabilityArtifactError,
     ReliabilityArtifactVerifiedMarketEvidenceBundleV3, ReliabilityArtifactVerifiedRoutingContextV1,
     ReliabilityVerifierStatementV1, ReplayError, ReplayProtectedMarketEvidenceBundleV4,
     RouteDecisionV1, RouteEvaluationOutcomeV1, RouteEvaluationRecordV1, RoutingContextV1,
-    RoutingError, SignedCapacityOfferV1, SignedMarketEvidenceBundleV2, SignedReliabilityArtifactV1,
-    SignedRoutingContextV1, build_buyer_replay_state_v1, build_market_evidence_bundle_v1,
-    build_metering_receipt_v1, build_reliability_artifact_v1,
+    RoutingError, SignedCapacityOfferV1, SignedInferenceRequestPolicyV1,
+    SignedMarketEvidenceBundleV2, SignedProviderExecutionReceiptV1, SignedReliabilityArtifactV1,
+    SignedRoutingContextV1, build_authenticated_execution_admission_v1,
+    build_buyer_replay_state_v1, build_market_evidence_bundle_v1,
+    build_metering_from_verified_execution_receipt_v1, build_metering_receipt_v1,
+    build_provider_execution_receipt_v1, build_reliability_artifact_v1,
     build_reliability_artifact_verified_market_evidence_bundle_v3,
     build_replay_protected_market_evidence_bundle_v4, build_signed_market_evidence_bundle_v2,
     derive_observed_success_probability_v1, derive_replay_state_transition_v1,
     derive_settlement_intent_v1, evaluate_reliability_artifact_verified_route_v1,
     evaluate_signed_route_v1, select_reliability_artifact_verified_route_v1, select_route_v1,
     select_signed_route_v1, validate_route_evaluation_against_offers_v1,
-    validate_route_evaluation_record_v1, verify_market_evidence_bundle_v1,
+    validate_route_evaluation_record_v1, verify_authenticated_execution_admission_v1,
+    verify_market_evidence_bundle_v1,
     verify_reliability_artifact_verified_market_evidence_bundle_v3,
     verify_replay_protected_market_evidence_bundle_v4, verify_replay_state_transition_v1,
-    verify_signed_market_evidence_bundle_v2, verify_signed_reliability_artifact_v1,
+    verify_signed_inference_request_policy_v1, verify_signed_market_evidence_bundle_v2,
+    verify_signed_provider_execution_receipt_v1, verify_signed_reliability_artifact_v1,
 };
 
 struct Fixture {
@@ -382,6 +389,249 @@ fn contract_replay_protected_v4_reconstructs_selected_route_and_nonce_transition
         },
     )?;
     assert_eq!(rebuilt, bundle.route_evaluation);
+    Ok(())
+}
+
+#[test]
+fn contract_authenticated_execution_receipt_reconstructs_metering_without_authority()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (fixture, before_state) = replay_protected_fixture()?;
+    let evaluation = reliability_evaluation(&fixture)?;
+    let transition = derive_replay_state_transition_v1(
+        &before_state,
+        &fixture.fixture.policy,
+        evaluation.evaluation_digest,
+        &fixture.fixture.evaluated_at,
+    )?;
+    let buyer_signing_key = SigningKey::from_bytes(&[80; 32]);
+    let receipt_signing_key = SigningKey::from_bytes(&[81; 32]);
+    let signed_policy = signed_buyer_policy(&fixture.fixture.policy, &buyer_signing_key)?;
+    let registry = execution_registry(
+        &fixture.fixture.verification_keys,
+        &buyer_signing_key,
+        &receipt_signing_key,
+    )?;
+    let routing = ReliabilityArtifactVerifiedRoutingContextV1 {
+        evaluated_at: &fixture.fixture.evaluated_at,
+        service: &fixture.fixture.service,
+        providers: &fixture.fixture.providers,
+        offers: &fixture.fixture.signed_offers,
+        policy: &fixture.fixture.policy,
+        assurance_sets: &fixture.fixture.assurance_sets,
+        assurance_blobs: &fixture.fixture.assurance_blobs,
+        reliability_artifacts: &fixture.reliability_artifacts,
+        verification_keys: &registry,
+    };
+    let context = AuthenticatedExecutionContextV1 {
+        routing,
+        replay_transition: &transition,
+        signed_policy: &signed_policy,
+    };
+    let admission = build_authenticated_execution_admission_v1(
+        &context,
+        &registry,
+        timestamp("2026-07-20T12:00:00Z")?,
+        timestamp("2026-07-20T12:05:00Z")?,
+    )?;
+    verify_authenticated_execution_admission_v1(&admission, &context, &registry)?;
+    assert!(!admission.authority_granted);
+    assert_eq!(
+        admission.admission_digest.to_hex(),
+        "a77397ce31098f5e38474baf344e933e4b976c6f5556558a0d08f1b9cde57117"
+    );
+
+    let receipt = build_provider_execution_receipt_v1(
+        &admission,
+        &context.routing,
+        ProviderExecutionReceiptDraftV1 {
+            started_at: timestamp("2026-07-20T12:00:01Z")?,
+            first_token_at: timestamp("2026-07-20T12:00:02Z")?,
+            completed_at: timestamp("2026-07-20T12:00:04Z")?,
+            input_tokens: 900,
+            output_tokens: 400,
+            output_digest: Sha256Digest::from_bytes([31; 32]),
+            runtime_image_digest: fixture.fixture.service.runtime_image_digest,
+        },
+    )?;
+    let statement =
+        signed_provider_execution_statement(&receipt, &admission, &receipt_signing_key, 1)?;
+    let signed_receipt = SignedProviderExecutionReceiptV1 {
+        schema_version: "hyperintel.signed-provider-execution-receipt.v1".to_owned(),
+        receipt,
+        statement,
+    };
+    verify_signed_provider_execution_receipt_v1(&signed_receipt, &admission, &context, &registry)?;
+    assert!(!signed_receipt.receipt.authority_granted);
+    assert_eq!(
+        signed_receipt.receipt.receipt_digest.to_hex(),
+        "5c8cc50fcca0c0aea007d43a76855d5ea592b1b22e62f7cba42bc8eb04487e67"
+    );
+
+    assert_authenticated_execution_outputs(
+        &fixture,
+        &evaluation,
+        &context,
+        &registry,
+        &admission,
+        &signed_receipt,
+    )?;
+    Ok(())
+}
+
+fn assert_authenticated_execution_outputs(
+    fixture: &ReliabilityFixture,
+    evaluation: &RouteEvaluationRecordV1,
+    context: &AuthenticatedExecutionContextV1<'_>,
+    registry: &VerificationKeyRegistry,
+    admission: &AuthenticatedExecutionAdmissionV1,
+    signed_receipt: &SignedProviderExecutionReceiptV1,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let metering = build_metering_from_verified_execution_receipt_v1(
+        signed_receipt,
+        admission,
+        context,
+        registry,
+        Some(Sha256Digest::from_bytes([33; 32])),
+    )?;
+    assert_eq!(
+        metering.provider_metering_evidence_digest,
+        signed_receipt.receipt.receipt_digest
+    );
+    let RouteEvaluationOutcomeV1::Selected(route) = &evaluation.outcome else {
+        return Err("selected execution fixture produced a denial".into());
+    };
+    let provider = fixture
+        .fixture
+        .providers
+        .get(&route.selected_provider_id)
+        .ok_or("selected execution provider missing")?;
+    let offer = fixture
+        .fixture
+        .offers
+        .iter()
+        .find(|offer| offer.digest().ok() == Some(route.selected_offer_digest))
+        .ok_or("selected execution offer missing")?;
+    let settlement = derive_settlement_intent_v1(
+        &fixture.fixture.service,
+        provider,
+        offer,
+        &fixture.fixture.policy,
+        route,
+        &metering,
+        timestamp("2026-07-20T13:00:00Z")?,
+    )?;
+    assert_eq!(
+        settlement
+            .provider_payout_amount
+            .checked_add(settlement.protocol_fee_amount)?
+            .checked_add(settlement.buyer_refund_amount)?,
+        settlement.escrow_amount
+    );
+
+    let mut tampered = signed_receipt.clone();
+    tampered.receipt.output_digest = Sha256Digest::from_bytes([99; 32]);
+    assert!(
+        verify_signed_provider_execution_receipt_v1(&tampered, admission, context, registry,)
+            .is_err()
+    );
+
+    let mut invalid_receipt_signature = signed_receipt.clone();
+    let invalid_prefix = if invalid_receipt_signature
+        .statement
+        .signature_hex
+        .starts_with("00")
+    {
+        "01"
+    } else {
+        "00"
+    };
+    invalid_receipt_signature
+        .statement
+        .signature_hex
+        .replace_range(0..2, invalid_prefix);
+    assert!(
+        verify_signed_provider_execution_receipt_v1(
+            &invalid_receipt_signature,
+            admission,
+            context,
+            registry,
+        )
+        .is_err()
+    );
+
+    let mut invalid_policy = context.signed_policy.clone();
+    let invalid_prefix = if invalid_policy.statement.signature_hex.starts_with("00") {
+        "01"
+    } else {
+        "00"
+    };
+    invalid_policy
+        .statement
+        .signature_hex
+        .replace_range(0..2, invalid_prefix);
+    assert!(
+        verify_signed_inference_request_policy_v1(
+            &invalid_policy,
+            registry,
+            &fixture.fixture.evaluated_at,
+        )
+        .is_err()
+    );
+
+    let encoded = serde_json::to_vec(&signed_receipt)?;
+    let decoded: SignedProviderExecutionReceiptV1 = serde_json::from_slice(&encoded)?;
+    assert_eq!(&decoded, signed_receipt);
+    Ok(())
+}
+
+#[test]
+fn contract_authenticated_execution_admission_rejects_an_all_denied_route()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (mut fixture, before_state) = replay_protected_fixture()?;
+    fixture.fixture.policy.minimum_success_probability = PartsPerMillion::new(1_000_000)?;
+    let evaluation = reliability_evaluation(&fixture)?;
+    assert!(matches!(
+        evaluation.outcome,
+        RouteEvaluationOutcomeV1::NoEligibleOffer
+    ));
+    let transition = derive_replay_state_transition_v1(
+        &before_state,
+        &fixture.fixture.policy,
+        evaluation.evaluation_digest,
+        &fixture.fixture.evaluated_at,
+    )?;
+    let buyer_signing_key = SigningKey::from_bytes(&[80; 32]);
+    let receipt_signing_key = SigningKey::from_bytes(&[81; 32]);
+    let signed_policy = signed_buyer_policy(&fixture.fixture.policy, &buyer_signing_key)?;
+    let registry = execution_registry(
+        &fixture.fixture.verification_keys,
+        &buyer_signing_key,
+        &receipt_signing_key,
+    )?;
+    let context = AuthenticatedExecutionContextV1 {
+        routing: ReliabilityArtifactVerifiedRoutingContextV1 {
+            evaluated_at: &fixture.fixture.evaluated_at,
+            service: &fixture.fixture.service,
+            providers: &fixture.fixture.providers,
+            offers: &fixture.fixture.signed_offers,
+            policy: &fixture.fixture.policy,
+            assurance_sets: &fixture.fixture.assurance_sets,
+            assurance_blobs: &fixture.fixture.assurance_blobs,
+            reliability_artifacts: &fixture.reliability_artifacts,
+            verification_keys: &registry,
+        },
+        replay_transition: &transition,
+        signed_policy: &signed_policy,
+    };
+    assert!(matches!(
+        build_authenticated_execution_admission_v1(
+            &context,
+            &registry,
+            timestamp("2026-07-20T12:00:00Z")?,
+            timestamp("2026-07-20T12:05:00Z")?,
+        ),
+        Err(ExecutionEvidenceError::NoSelectedRoute)
+    ));
     Ok(())
 }
 
@@ -2445,6 +2695,84 @@ fn reliability_key(
         valid_until: timestamp("2026-07-22T00:00:00Z")?,
         revoked_at,
     })
+}
+
+fn signed_buyer_policy(
+    policy: &InferenceRequestPolicyV1,
+    signing_key: &SigningKey,
+) -> Result<SignedInferenceRequestPolicyV1, Box<dyn std::error::Error>> {
+    let mut statement = BuyerPolicyStatementV1 {
+        schema_version: "hyperintel.buyer-policy-statement.v1".to_owned(),
+        request_policy_digest: policy.digest()?,
+        replay_snapshot_digest: policy.replay_snapshot_digest,
+        issued_at: policy.valid_from.clone(),
+        expires_at: policy.valid_until.clone(),
+        sequence: policy.nonce,
+        signer_id: policy.buyer_id.clone(),
+        key_id: "key:buyer-policy-1".parse()?,
+        algorithm: "ed25519".to_owned(),
+        signature_hex: String::new(),
+    };
+    statement.signature_hex =
+        HEXLOWER.encode(&signing_key.sign(&statement.signing_message()?).to_bytes());
+    Ok(SignedInferenceRequestPolicyV1 {
+        schema_version: "hyperintel.signed-inference-request-policy.v1".to_owned(),
+        policy: policy.clone(),
+        statement,
+    })
+}
+
+fn signed_provider_execution_statement(
+    receipt: &hyperintel_market::ProviderExecutionReceiptV1,
+    admission: &hyperintel_market::AuthenticatedExecutionAdmissionV1,
+    signing_key: &SigningKey,
+    sequence: u64,
+) -> Result<ProviderExecutionStatementV1, Box<dyn std::error::Error>> {
+    let mut statement = ProviderExecutionStatementV1 {
+        schema_version: "hyperintel.provider-execution-statement.v1".to_owned(),
+        receipt_digest: receipt.receipt_digest,
+        admission_digest: admission.admission_digest,
+        issued_at: receipt.completed_at.clone(),
+        expires_at: admission.deadline_at.clone(),
+        sequence,
+        signer_id: receipt.provider_id.clone(),
+        key_id: "key:beta-receipt".parse()?,
+        algorithm: "ed25519".to_owned(),
+        signature_hex: String::new(),
+    };
+    statement.signature_hex =
+        HEXLOWER.encode(&signing_key.sign(&statement.signing_message()?).to_bytes());
+    Ok(statement)
+}
+
+fn execution_registry(
+    existing_keys: &[RegisteredVerificationKeyV1],
+    buyer_signing_key: &SigningKey,
+    receipt_signing_key: &SigningKey,
+) -> Result<VerificationKeyRegistry, Box<dyn std::error::Error>> {
+    let mut registry = VerificationKeyRegistry::default();
+    for key in existing_keys {
+        registry.register(key.clone())?;
+    }
+    registry.register(RegisteredVerificationKeyV1 {
+        signer_id: "buyer:demo".parse()?,
+        key_id: "key:buyer-policy-1".parse()?,
+        trust_root_class: AssuranceRootClassV1::BuyerPolicy,
+        public_key_hex: HEXLOWER.encode(buyer_signing_key.verifying_key().as_bytes()),
+        valid_from: timestamp("2026-07-20T10:00:00Z")?,
+        valid_until: timestamp("2026-07-20T14:00:00Z")?,
+        revoked_at: None,
+    })?;
+    registry.register(RegisteredVerificationKeyV1 {
+        signer_id: "provider:beta".parse()?,
+        key_id: "key:beta-receipt".parse()?,
+        trust_root_class: AssuranceRootClassV1::ProviderKey,
+        public_key_hex: HEXLOWER.encode(receipt_signing_key.verifying_key().as_bytes()),
+        valid_from: timestamp("2026-07-20T10:00:00Z")?,
+        valid_until: timestamp("2026-07-20T14:00:00Z")?,
+        revoked_at: None,
+    })?;
+    Ok(registry)
 }
 
 fn refresh_reliability_artifact_signature(
