@@ -202,11 +202,39 @@ logging, custody, funds, deployment, production credential, or production
 authority. Any real adapter, credential access, or external effect requires a
 separate state slice and operator acknowledgement.
 
+## `hyperintel-provider-agent-v1`
+
+`crates/hyperintel-provider-agent/**`, its workspace membership and exact
+dependency pins in `Cargo.toml` and `Cargo.lock`, the focused-test command in
+`package.json`, and `docs/provider-agent.md`: dedicated caller-supplied
+provider-agent Ed25519 trust; a signed service manifest and short-lived signed
+readiness assertion bound to the exact provider, agent instance, service,
+runtime configuration, model artifact, tokenizer, runtime image, capability
+set, validity window, revocation state, and caller-pinned rollback checkpoint;
+and one atomic preflight-and-execute wrapper around the existing local
+execution harness. Logical duplicate revocations, sequence rollback, and
+same-sequence forks must fail closed. Invalid control state must fail before
+durable replay consumption or injected provider invocation. A valid call may
+enter the existing harness exactly once with no retry or fallback and must
+retain the exact admission, selected-route, manifest, and readiness lineage in
+its local result.
+
+The manifest and readiness record are provider/operator assertions, not
+observed liveness, availability proof, independent attestation, or routing
+authority. The slice may reuse existing canonical identity/time/digest,
+Ed25519, local execution, and dependency-injection patterns, but its keys must
+have dedicated provider-agent purposes and may not reuse offer, receipt,
+tenant-IAM, operator-secret, assurance, wallet, or settlement authority.
+Normal tests remain hermetic. The slice authorizes no socket, HTTP, TLS,
+ambient credential, secret resolution, external provider call, live stream or
+cancellation transport, health observation, automatic route selection or
+failover, new durable replay mechanism, receipt-signing key custody,
+settlement, funds, deployment, production identity, or production authority.
+
 ## Reserved future slices
 
 The following names reserve no implementation authority:
 
-- `hyperintel-provider-agent-v1`
 - `hyperintel-openai-gateway-v1`
 - `hyperintel-private-transport-v1`
 - `hyperintel-hyperevm-contracts-v1`
