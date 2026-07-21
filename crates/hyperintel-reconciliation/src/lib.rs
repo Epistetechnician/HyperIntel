@@ -332,9 +332,14 @@ fn reconcile_completed(
         input.admission,
         input.authenticated,
         input.verification_keys,
-        completed.metering_receipt.buyer_observation_digest,
+        None,
     )?;
-    if rebuilt_metering != completed.metering_receipt {
+    if completed
+        .metering_receipt
+        .buyer_observation_digest
+        .is_some()
+        || rebuilt_metering != completed.metering_receipt
+    {
         return Err(ReceiptReconciliationError::MeteringMismatch);
     }
     let provider = input

@@ -222,7 +222,7 @@ async fn contract_metering_settlement_status_and_report_tamper_fail_closed()
 -> Result<(), Box<dyn std::error::Error>> {
     let completed = build_case("provider:alpha", CaseMode::Completed).await?;
     assert_metering_tamper_rejected(&completed)?;
-    assert_buyer_observation_preserved(&completed)?;
+    assert_self_consistent_buyer_observation_rejected(&completed)?;
     assert_settlement_tamper_rejected(&completed)?;
     assert_report_tamper_rejected(&completed)?;
     assert_completed_terminal_swap_rejected(&completed)?;
@@ -345,7 +345,7 @@ fn assert_metering_tamper_rejected(
     Ok(())
 }
 
-fn assert_buyer_observation_preserved(
+fn assert_self_consistent_buyer_observation_rejected(
     case: &ReconciliationCase,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let authenticated = case_authenticated_context(case);
@@ -388,15 +388,16 @@ fn assert_buyer_observation_preserved(
     let mut terminal = case.terminal.clone();
     terminal.outcome_digest = Some(completed.completion_digest);
     refresh_terminal(&mut terminal)?;
-    let report = reconcile_parts(
-        case,
-        &case.execution_case.admission,
-        &case.start,
-        &terminal,
-        &execution,
-    )?;
-    assert!(!report.authority_granted);
-    assert_content_free(&serde_json::to_string(&report)?);
+    assert!(
+        reconcile_parts(
+            case,
+            &case.execution_case.admission,
+            &case.start,
+            &terminal,
+            &execution,
+        )
+        .is_err()
+    );
     Ok(())
 }
 
