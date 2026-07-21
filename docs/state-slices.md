@@ -243,7 +243,10 @@ in `crates/hyperintel-execution-journal/src/lib.rs` with direct coverage in
 post-control/pre-harness activation seam in
 `crates/hyperintel-provider-agent/src/execution.rs` with its export in
 `crates/hyperintel-provider-agent/src/lib.rs` and direct coverage in
-`crates/hyperintel-provider-agent/tests/provider_agent.rs`: deterministic
+`crates/hyperintel-provider-agent/tests/provider_agent.rs`, plus one canonical
+public read-only harness-preflight seam in
+`crates/hyperintel-execution/src/lib.rs` with parity coverage in
+`crates/hyperintel-execution/tests/local_execution.rs`: deterministic
 composition of one validated local runtime configuration, one exact tenant
 `SUBMIT_INFERENCE` authorization, one signed operator-secret authorization and
 injected synthetic resolution, one signed provider-agent control lineage, one
@@ -256,7 +259,10 @@ caller-supplied async attempt, actual replay inspection, and terminalization;
 it must not retry, resume, or duplicate execution, and the existing journaled
 harness must delegate to it without changing its public behavior. The provider-
 agent activation hook must run only after current signed control and exact
-execution bindings pass, but before harness entry or replay consumption. It
+execution bindings plus the canonical harness preflight pass, but before
+harness entry or replay consumption. The public harness preflight must remain
+the single implementation used by both the harness and provider-agent; no
+validation logic may be copied. It
 must invoke at most one activation closure and must not expose a reusable
 verified-control token. The composition uses that hook to resolve one synthetic
 secret into a private nonserializable secret-bound injected provider adapter;
