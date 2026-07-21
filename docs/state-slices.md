@@ -162,6 +162,23 @@ resolution, credential access, directory creation, database opening, socket,
 provider call, wallet, chain, settlement, custody, funds, or production
 authority.
 
+## `hyperintel-tenant-iam-v1`
+
+`crates/hyperintel-tenant-iam/**`, its workspace membership and exact dependency
+pins in `Cargo.toml` and `Cargo.lock`, the focused-test command in `package.json`,
+and `docs/tenant-iam.md`: deterministic pure-data buyer-tenant, principal,
+fixed-role, fixed-scope, signed access-token, revocation, and resource-ownership
+contracts; caller-supplied IAM snapshots and Ed25519 verification keys; exact
+schema, tenant, principal, audience, validity, role, scope, signature,
+revocation, and ownership checks; and an opaque non-authoritative verified-
+access result.
+
+This slice issues no token, generates or stores no key, reads no ambient key,
+secret, environment, configuration file, or credential, opens no filesystem,
+database, socket, provider, wallet, or chain connection, consumes no durable
+replay state, and grants no request-release, execution, settlement, custody,
+funds, production-IAM, or production authority.
+
 ## Reserved future slices
 
 The following names reserve no implementation authority:

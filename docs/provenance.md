@@ -203,6 +203,17 @@ provider, or add settlement authority. Size, schema, canonical digest, path,
 collision, connection-bound, secret-redaction, no-side-effect, strict Clippy,
 and full repository gates passed on the committed candidate.
 
+Queued after runtime configuration is `hyperintel-tenant-iam-v1`. It may reuse
+only existing HyperIntel canonical JSON, strict identifier and timestamp,
+caller-controlled key registry, Ed25519 verification, fixed trust-root class,
+digest, and fail-closed validation patterns. It must define inference-native
+buyer-tenant, principal, fixed-role, fixed-scope, signed-token, revocation, and
+resource-ownership records without copying source code or adding a runtime
+dependency. It may not issue tokens, generate or store keys, read ambient
+configuration or credentials, open a filesystem, database, or socket, contact
+a provider, consume durable replay state, release a request, or grant
+settlement, custody, funds, production-IAM, or production authority.
+
 ## Licensing boundary
 
 Neither source checkout exposed a root license file during the migration audit.
