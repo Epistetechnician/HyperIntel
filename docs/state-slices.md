@@ -209,8 +209,10 @@ dependency pins in `Cargo.toml` and `Cargo.lock`, the focused-test command in
 `package.json`, and `docs/provider-agent.md`: dedicated caller-supplied
 provider-agent Ed25519 trust; a signed service manifest and short-lived signed
 readiness assertion bound to the exact provider, agent instance, service,
-runtime configuration, model artifact, tokenizer, runtime image, capability
-set, validity window, revocation state, and caller-pinned rollback checkpoint;
+selected offer, runtime configuration, model artifact, tokenizer, runtime
+image, capability set, configured receipt key, text-stream interface,
+immutable secret-reference digest, validity window, revocation state, and
+caller-pinned rollback checkpoint;
 and one atomic preflight-and-execute wrapper around the existing local
 execution harness. Logical duplicate revocations, sequence rollback, and
 same-sequence forks must fail closed. Invalid control state must fail before
