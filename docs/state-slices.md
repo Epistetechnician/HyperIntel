@@ -179,6 +179,29 @@ database, socket, provider, wallet, or chain connection, consumes no durable
 replay state, and grants no request-release, execution, settlement, custody,
 funds, production-IAM, or production authority.
 
+## `hyperintel-local-secret-injection-v1`
+
+`crates/hyperintel-secret-provider/**`, its workspace membership and exact
+dependency pins in `Cargo.toml` and `Cargo.lock`, the focused-test command in
+`package.json`, and `docs/secret-provider.md`: dedicated caller-supplied
+operator-secret Ed25519 trust; one short-lived signed authorization bound to an
+exact runtime configuration, consumer, selected inference provider, immutable-
+version `SecretReferenceV1`, provider-API-authentication purpose, operation
+context, explicit evaluation time, and closed revocation state; one
+preflighted invocation of an injected in-process resolver; exact returned
+reference-metadata validation; and bounded, non-cloneable, nonserializable,
+redacted, zeroize-on-drop secret material.
+
+Normal tests may use only hermetic fixture resolvers and synthetic bytes. The
+crate may invoke one caller-supplied resolver after authorization, but does not
+establish or authorize the resolver implementation's effects or trust. It
+authorizes no tenant-IAM key reuse, ambient environment/file/keychain access,
+network, KMS/HSM/cloud-secret-manager adapter, model-provider call, receipt-
+signing key, wallet, chain, settlement, cache, retry, fallback, persistence,
+logging, custody, funds, deployment, production credential, or production
+authority. Any real adapter, credential access, or external effect requires a
+separate state slice and operator acknowledgement.
+
 ## Reserved future slices
 
 The following names reserve no implementation authority:

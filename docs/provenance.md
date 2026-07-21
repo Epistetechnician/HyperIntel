@@ -83,7 +83,7 @@ Explicitly excluded:
   membrane, agent identity, payoff/residual market semantics, live attestation
   provider integrations, and all uncommitted admission/P01B work;
 - any claim that local replay constitutes accepted evidence or production
-  authority.
+authority.
 
 ## Local R0 extension lineage
 
@@ -217,6 +217,18 @@ token, generates or stores no key, reads no ambient configuration or
 credential, opens no filesystem, database, or socket, contacts no provider,
 consumes no durable replay state, releases no request, and grants no
 settlement, custody, funds, production-IAM, or production authority.
+
+Queued after tenant IAM is `hyperintel-local-secret-injection-v1`. It may reuse
+only the existing canonical JSON, strict identity/time/digest, Ed25519,
+fail-closed verification, opaque-result, runtime-config secret-reference, and
+dependency-injection patterns. It must use new dedicated operator-secret trust
+and may not reuse tenant-IAM, buyer-policy, provider-receipt, assurance,
+wallet, or settlement authority. Only hermetic fixture resolution and
+synthetic bytes are authorized in normal tests. No source code, ambient
+credential adapter, environment/file/keychain access, network, KMS/HSM/cloud
+secret manager, provider call, cache, retry, fallback, persistence, logging,
+funds, deployment, production credential, or production authority may be
+added.
 
 ## Licensing boundary
 
