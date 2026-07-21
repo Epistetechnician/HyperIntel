@@ -37,7 +37,7 @@ fn contract_cli_process_verifies_v1_through_v4_with_separate_caller_trust()
         (
             "evidence-v4.json",
             "trusted-keys-v4.json",
-            "6ae73c889a82cdc83712260de55fb1e08d74064745b541a81138fb0bd797fd13",
+            "05397586672fb65f764812cf45176653caabd7a316968f268d5111a4a6a2daa8",
         ),
     ] {
         let output = run_cli(&[fixture_path(evidence), fixture_path(trust)])?;

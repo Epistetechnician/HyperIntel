@@ -411,6 +411,12 @@ pub enum RoutingError {
     Canonicalization(#[from] CanonicalizationError),
 }
 
+#[derive(Clone, Copy)]
+enum RejectionDetailProfile {
+    LegacyCollapsed,
+    CausalV4,
+}
+
 /// Select the lowest expected-successful-cost eligible offer.
 ///
 /// Tie-breaking is buyer quote, p95 latency, highest success probability, then
@@ -421,7 +427,8 @@ pub enum RoutingError {
 /// Returns on duplicate identity, canonicalization, arithmetic, or no eligible
 /// offer. Ineligible offers remain visible in the decision candidate set.
 pub fn select_route_v1(context: &RoutingContextV1<'_>) -> Result<RouteDecisionV1, RoutingError> {
-    evaluate_route_v1(context)?.into_selected_route()
+    evaluate_route_internal(context, None, None, RejectionDetailProfile::LegacyCollapsed)?
+        .into_selected_route()
 }
 
 /// Evaluate every offer and retain canonical typed rejection records.
@@ -436,7 +443,7 @@ pub fn select_route_v1(context: &RoutingContextV1<'_>) -> Result<RouteDecisionV1
 pub fn evaluate_route_v1(
     context: &RoutingContextV1<'_>,
 ) -> Result<RouteEvaluationRecordV1, RoutingError> {
-    evaluate_route_internal(context, None, None)
+    evaluate_route_internal(context, None, None, RejectionDetailProfile::CausalV4)
 }
 
 /// Select among offers only after provider-key authentication of each exact offer digest.
@@ -452,7 +459,8 @@ pub fn evaluate_route_v1(
 pub fn select_signed_route_v1(
     context: &SignedRoutingContextV1<'_>,
 ) -> Result<RouteDecisionV1, RoutingError> {
-    evaluate_signed_route_v1(context)?.into_selected_route()
+    evaluate_signed_route_internal(context, RejectionDetailProfile::LegacyCollapsed)?
+        .into_selected_route()
 }
 
 /// Evaluate provider-authenticated offers and retain every typed eligibility report.
@@ -466,6 +474,13 @@ pub fn select_signed_route_v1(
 /// canonicalization, or arithmetic failure.
 pub fn evaluate_signed_route_v1(
     context: &SignedRoutingContextV1<'_>,
+) -> Result<RouteEvaluationRecordV1, RoutingError> {
+    evaluate_signed_route_internal(context, RejectionDetailProfile::CausalV4)
+}
+
+fn evaluate_signed_route_internal(
+    context: &SignedRoutingContextV1<'_>,
+    rejection_detail_profile: RejectionDetailProfile,
 ) -> Result<RouteEvaluationRecordV1, RoutingError> {
     let mut offers = Vec::with_capacity(context.offers.len());
     let mut signed_by_digest = BTreeMap::new();
@@ -489,7 +504,12 @@ pub fn evaluate_signed_route_v1(
         assurance_blobs: context.assurance_blobs,
         verification_keys: context.verification_keys,
     };
-    evaluate_route_internal(&unsigned_context, Some(&signed_by_digest), None)
+    evaluate_route_internal(
+        &unsigned_context,
+        Some(&signed_by_digest),
+        None,
+        rejection_detail_profile,
+    )
 }
 
 /// Select among provider-authenticated offers whose typed reliability artifact also verifies.
@@ -505,7 +525,8 @@ pub fn evaluate_signed_route_v1(
 pub fn select_reliability_artifact_verified_route_v1(
     context: &ReliabilityArtifactVerifiedRoutingContextV1<'_>,
 ) -> Result<RouteDecisionV1, RoutingError> {
-    evaluate_reliability_artifact_verified_route_v1(context)?.into_selected_route()
+    evaluate_reliability_artifact_route_internal(context, RejectionDetailProfile::LegacyCollapsed)?
+        .into_selected_route()
 }
 
 /// Evaluate signed offers with typed reliability checks and retain every eligibility report.
@@ -519,6 +540,13 @@ pub fn select_reliability_artifact_verified_route_v1(
 /// canonicalization, or arithmetic failure.
 pub fn evaluate_reliability_artifact_verified_route_v1(
     context: &ReliabilityArtifactVerifiedRoutingContextV1<'_>,
+) -> Result<RouteEvaluationRecordV1, RoutingError> {
+    evaluate_reliability_artifact_route_internal(context, RejectionDetailProfile::CausalV4)
+}
+
+fn evaluate_reliability_artifact_route_internal(
+    context: &ReliabilityArtifactVerifiedRoutingContextV1<'_>,
+    rejection_detail_profile: RejectionDetailProfile,
 ) -> Result<RouteEvaluationRecordV1, RoutingError> {
     let mut offers = Vec::with_capacity(context.offers.len());
     let mut signed_by_digest = BTreeMap::new();
@@ -546,6 +574,7 @@ pub fn evaluate_reliability_artifact_verified_route_v1(
         &unsigned_context,
         Some(&signed_by_digest),
         Some(context.reliability_artifacts),
+        rejection_detail_profile,
     )
 }
 
@@ -553,6 +582,7 @@ fn evaluate_route_internal(
     context: &RoutingContextV1<'_>,
     signed_offers: Option<&BTreeMap<Sha256Digest, &SignedCapacityOfferV1>>,
     reliability_artifacts: Option<&BTreeMap<Sha256Digest, SignedReliabilityArtifactV1>>,
+    rejection_detail_profile: RejectionDetailProfile,
 ) -> Result<RouteEvaluationRecordV1, RoutingError> {
     let service_digest = context.service.digest()?;
     let policy_digest = context.policy.digest()?;
@@ -570,6 +600,7 @@ fn evaluate_route_internal(
             policy_digest,
             signed_offers,
             reliability_artifacts,
+            rejection_detail_profile,
         )?);
     }
     reports.sort_by_key(|report| report.offer_digest);
@@ -579,15 +610,30 @@ fn evaluate_route_internal(
     if let Some(reliability_artifacts) = reliability_artifacts {
         reject_verified_reliability_sequence_equivocation(context, reliability_artifacts)?;
     }
-    let (evaluation_profile, routing_algorithm) = if reliability_artifacts.is_some() {
-        (
-            "signed-capacity-offer-reliability-artifact-v1",
-            "expected-successful-cost-reliability-artifact-v1",
-        )
-    } else if signed_offers.is_some() {
-        ("signed-capacity-offer-v1", "expected-successful-cost-v1")
+    let routing_algorithm = if reliability_artifacts.is_some() {
+        "expected-successful-cost-reliability-artifact-v1"
     } else {
-        ("unsigned-capacity-offer-v1", "expected-successful-cost-v1")
+        "expected-successful-cost-v1"
+    };
+    let evaluation_profile = match (
+        signed_offers.is_some(),
+        reliability_artifacts.is_some(),
+        rejection_detail_profile,
+    ) {
+        (_, true, RejectionDetailProfile::LegacyCollapsed) => {
+            "signed-capacity-offer-reliability-artifact-v1"
+        }
+        (_, true, RejectionDetailProfile::CausalV4) => {
+            "signed-capacity-offer-reliability-artifact-causal-rejections-v1"
+        }
+        (true, false, RejectionDetailProfile::LegacyCollapsed) => "signed-capacity-offer-v1",
+        (true, false, RejectionDetailProfile::CausalV4) => {
+            "signed-capacity-offer-causal-rejections-v1"
+        }
+        (false, false, RejectionDetailProfile::LegacyCollapsed) => "unsigned-capacity-offer-v1",
+        (false, false, RejectionDetailProfile::CausalV4) => {
+            "unsigned-capacity-offer-causal-rejections-v1"
+        }
     };
 
     let outcome = build_route_evaluation_outcome(
@@ -700,6 +746,7 @@ fn evaluate_offer(
     policy_digest: Sha256Digest,
     signed_offers: Option<&BTreeMap<Sha256Digest, &SignedCapacityOfferV1>>,
     reliability_artifacts: Option<&BTreeMap<Sha256Digest, SignedReliabilityArtifactV1>>,
+    rejection_detail_profile: RejectionDetailProfile,
 ) -> Result<EligibilityReportV1, RoutingError> {
     let offer_digest = offer.digest()?;
     let mut failures = BTreeSet::new();
@@ -730,8 +777,8 @@ fn evaluate_offer(
         offer,
         offer_digest,
         service_digest,
-        provider,
         signed_offers,
+        rejection_detail_profile,
         &mut failures,
     );
 
@@ -845,11 +892,11 @@ fn evaluate_provider_constraints(
     offer: &CapacityOfferV1,
     offer_digest: Sha256Digest,
     service_digest: Sha256Digest,
-    provider: Option<&ProviderIdentityV1>,
     signed_offers: Option<&BTreeMap<Sha256Digest, &SignedCapacityOfferV1>>,
+    rejection_detail_profile: RejectionDetailProfile,
     failures: &mut BTreeSet<EligibilityFailureV1>,
 ) {
-    if let Some(provider) = provider {
+    if let Some(provider) = context.providers.get(&offer.provider_id) {
         if provider.schema_version != "hyperintel.provider-identity.v1" {
             failures.insert(EligibilityFailureV1::UnsupportedSchema);
         }
@@ -885,13 +932,29 @@ fn evaluate_provider_constraints(
         {
             failures.insert(EligibilityFailureV1::ProviderDenied);
         }
-        match evaluate_offer_assurance(context, provider, service_digest) {
-            OfferAssuranceEvaluation::EvidenceInvalid => {
+        match (
+            rejection_detail_profile,
+            evaluate_offer_assurance(context, provider, service_digest),
+        ) {
+            (
+                RejectionDetailProfile::LegacyCollapsed,
+                OfferAssuranceEvaluation::EvidenceInvalid
+                | OfferAssuranceEvaluation::PolicyRejected { .. },
+            ) => {
+                failures.insert(EligibilityFailureV1::AssurancePolicyRejected);
+                if signed_offers.is_some() {
+                    failures.insert(EligibilityFailureV1::OfferSignatureInvalid);
+                }
+            }
+            (RejectionDetailProfile::CausalV4, OfferAssuranceEvaluation::EvidenceInvalid) => {
                 failures.insert(EligibilityFailureV1::AssuranceEvidenceInvalid);
             }
-            OfferAssuranceEvaluation::PolicyRejected {
-                provider_envelope_digest,
-            } => {
+            (
+                RejectionDetailProfile::CausalV4,
+                OfferAssuranceEvaluation::PolicyRejected {
+                    provider_envelope_digest,
+                },
+            ) => {
                 failures.insert(EligibilityFailureV1::AssurancePolicyRejected);
                 evaluate_offer_signature(
                     context,
@@ -902,9 +965,12 @@ fn evaluate_provider_constraints(
                     failures,
                 );
             }
-            OfferAssuranceEvaluation::Accepted {
-                provider_envelope_digest,
-            } => {
+            (
+                RejectionDetailProfile::LegacyCollapsed | RejectionDetailProfile::CausalV4,
+                OfferAssuranceEvaluation::Accepted {
+                    provider_envelope_digest,
+                },
+            ) => {
                 evaluate_offer_signature(
                     context,
                     provider,
@@ -917,6 +983,13 @@ fn evaluate_provider_constraints(
         }
     } else {
         failures.insert(EligibilityFailureV1::ProviderUnknown);
+        if matches!(
+            rejection_detail_profile,
+            RejectionDetailProfile::LegacyCollapsed
+        ) && signed_offers.is_some()
+        {
+            failures.insert(EligibilityFailureV1::OfferSignatureInvalid);
+        }
     }
 }
 
@@ -1270,10 +1343,14 @@ pub fn validate_route_evaluation_record_v1(
                 evaluation.routing_algorithm.as_str()
             ),
             (
-                "unsigned-capacity-offer-v1" | "signed-capacity-offer-v1",
+                "unsigned-capacity-offer-v1"
+                    | "signed-capacity-offer-v1"
+                    | "unsigned-capacity-offer-causal-rejections-v1"
+                    | "signed-capacity-offer-causal-rejections-v1",
                 "expected-successful-cost-v1"
             ) | (
-                "signed-capacity-offer-reliability-artifact-v1",
+                "signed-capacity-offer-reliability-artifact-v1"
+                    | "signed-capacity-offer-reliability-artifact-causal-rejections-v1",
                 "expected-successful-cost-reliability-artifact-v1"
             )
         )

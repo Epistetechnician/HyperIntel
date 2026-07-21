@@ -1,4 +1,4 @@
-//! Hermetic process gate for the source-bound abstract routing property.
+//! Offline environment-pinned process gate for the source-bound abstract routing property.
 
 use std::{
     io::Write as _,
@@ -9,7 +9,7 @@ use data_encoding::HEXLOWER;
 use sha2::{Digest as _, Sha256};
 
 const ROUTING_SOURCE_SHA256: &str =
-    "814c8d8bd5ee42b0ba1d7c97533f475aac8d8c84bab611163115af02efc6acbe";
+    "a0ea4bc9129b509692ac3d4b55e215ba3514056cb09c270cdbaf95142d1bb425";
 const PINNED_Z3: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tools/pinned-z3");
 const Z3_VERSION: &str = "Z3 version 4.15.0 - 64 bit\n";
 

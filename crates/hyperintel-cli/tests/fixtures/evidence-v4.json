@@ -252,7 +252,7 @@
         ]
       }
     },
-    "bundle_digest": "6ae73c889a82cdc83712260de55fb1e08d74064745b541a81138fb0bd797fd13",
+    "bundle_digest": "05397586672fb65f764812cf45176653caabd7a316968f268d5111a4a6a2daa8",
     "evaluated_at": "2026-07-20T12:00:00Z",
     "explicit_nonclaims": [
       "no-inference-execution",
@@ -444,10 +444,10 @@
       "consumed_nonce": 1,
       "evaluated_at": "2026-07-20T12:00:00Z",
       "request_policy_digest": "a3e7a1aaecc01a84220ffb9369cfaf6a1eb53fd94a858e41f3042ff2b5e2227e",
-      "route_evaluation_digest": "755067bb504a4f013d12c7ab91426b2441ed0dbd8be4816af3cd43020abbc05a",
+      "route_evaluation_digest": "7a56c7d39c5d31c062abe8d113bbda1e7f7da01f500712da473ffdb451116e38",
       "schema_version": "hyperintel.replay-state-transition.v1",
       "state_slice": "hyperintel-route-receipt-vertical-slice-v1",
-      "transition_digest": "157ccf6d6486add67e4d3299c12661d026d5872f19aae922ad6f598f698d9907"
+      "transition_digest": "3e930e8b696a348207dc2662959b6471afbed1d4327eb9f13e735dc7e145f6c9"
     },
     "route_evaluation": {
       "authority_granted": false,
@@ -496,8 +496,8 @@
         }
       ],
       "evaluated_at": "2026-07-20T12:00:00Z",
-      "evaluation_digest": "755067bb504a4f013d12c7ab91426b2441ed0dbd8be4816af3cd43020abbc05a",
-      "evaluation_profile": "signed-capacity-offer-reliability-artifact-v1",
+      "evaluation_digest": "7a56c7d39c5d31c062abe8d113bbda1e7f7da01f500712da473ffdb451116e38",
+      "evaluation_profile": "signed-capacity-offer-reliability-artifact-causal-rejections-v1",
       "outcome": {
         "route": {
           "authority_granted": false,

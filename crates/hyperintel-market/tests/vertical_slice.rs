@@ -252,6 +252,74 @@ fn contract_reliability_v3_reconstructs_and_has_stable_golden_digests()
 }
 
 #[test]
+fn contract_v1_v2_v3_rejection_fallback_bundle_semantics_remain_frozen()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut v1_v2_fixture = fixture()?;
+    remove_provider_assurance(&mut v1_v2_fixture, "provider:beta")?;
+
+    let v1_bundle = market_bundle(&v1_v2_fixture)?;
+    assert_eq!(
+        v1_bundle.route.selected_provider_id.as_str(),
+        "provider:alpha"
+    );
+    assert_eq!(
+        rejected_candidate_report_digest(&v1_bundle.route, "provider:beta")?.to_hex(),
+        "0831c3c91843faddc790737dac16aa8f13d00144faf566d6d88cc09e65819017"
+    );
+    assert_eq!(
+        v1_bundle.bundle_digest.to_hex(),
+        "663b688e151535a74a9c370263b7536082f9e4a6a5bb542cd19103b8c303fa39"
+    );
+    verify_market_evidence_bundle_v1(
+        &v1_bundle,
+        &v1_v2_fixture.assurance_blobs,
+        &v1_v2_fixture.registry,
+    )?;
+
+    let v2_bundle = signed_bundle(&v1_v2_fixture)?;
+    assert_eq!(
+        v2_bundle.route.selected_provider_id.as_str(),
+        "provider:alpha"
+    );
+    assert_eq!(
+        rejected_candidate_report_digest(&v2_bundle.route, "provider:beta")?.to_hex(),
+        "d3ddb7762b360d5d704ded597daace907f12313f999e820b41b613f4945a9734"
+    );
+    assert_eq!(
+        v2_bundle.bundle_digest.to_hex(),
+        "c4d146a84758ca790e71cca8bd3d3a60f75d93c9dd6905c932dce1af1ce2719d"
+    );
+    verify_signed_market_evidence_bundle_v2(
+        &v2_bundle,
+        &v1_v2_fixture.assurance_blobs,
+        &v1_v2_fixture.registry,
+    )?;
+
+    let mut v3_fixture = reliability_fixture()?;
+    remove_provider_assurance(&mut v3_fixture.fixture, "provider:beta")?;
+    let v3_bundle = reliability_bundle(&v3_fixture)?;
+    assert_eq!(
+        v3_bundle.route.selected_provider_id.as_str(),
+        "provider:alpha"
+    );
+    assert_eq!(
+        rejected_candidate_report_digest(&v3_bundle.route, "provider:beta")?.to_hex(),
+        "06eecda1c2e8a2874e197d0b7b9504aac2f63ec45c6749c5a10548c03e8d5c62"
+    );
+    assert_eq!(
+        v3_bundle.bundle_digest.to_hex(),
+        "6d0a49cf0b10211ac9a54020b43d223f7bfa4af8b89871795157f47ee1282919"
+    );
+    verify_reliability_artifact_verified_market_evidence_bundle_v3(
+        &v3_bundle,
+        &v3_fixture.fixture.assurance_blobs,
+        &v3_fixture.reliability_artifacts,
+        &v3_fixture.fixture.registry,
+    )?;
+    Ok(())
+}
+
+#[test]
 fn contract_replay_protected_v4_reconstructs_selected_route_and_nonce_transition()
 -> Result<(), Box<dyn std::error::Error>> {
     let (fixture, before_state) = replay_protected_fixture()?;
@@ -274,15 +342,15 @@ fn contract_replay_protected_v4_reconstructs_selected_route_and_nonce_transition
     assert!(bundle.settlement.is_some());
     assert_eq!(
         bundle.route_evaluation.evaluation_digest.to_hex(),
-        "755067bb504a4f013d12c7ab91426b2441ed0dbd8be4816af3cd43020abbc05a"
+        "7a56c7d39c5d31c062abe8d113bbda1e7f7da01f500712da473ffdb451116e38"
     );
     assert_eq!(
         bundle.replay_transition.transition_digest.to_hex(),
-        "157ccf6d6486add67e4d3299c12661d026d5872f19aae922ad6f598f698d9907"
+        "3e930e8b696a348207dc2662959b6471afbed1d4327eb9f13e735dc7e145f6c9"
     );
     assert_eq!(
         bundle.bundle_digest.to_hex(),
-        "6ae73c889a82cdc83712260de55fb1e08d74064745b541a81138fb0bd797fd13"
+        "05397586672fb65f764812cf45176653caabd7a316968f268d5111a4a6a2daa8"
     );
     assert!(bundle.explicit_nonclaims.iter().any(|claim| {
         claim == "no-buyer-policy-authentication-or-durable-atomic-replay-state-enforcement"
@@ -1495,6 +1563,54 @@ fn route(fixture: &Fixture) -> Result<RouteDecisionV1, Box<dyn std::error::Error
         assurance_blobs: &fixture.assurance_blobs,
         verification_keys: &fixture.registry,
     })?)
+}
+
+fn rejected_candidate_report_digest(
+    route: &RouteDecisionV1,
+    provider_id: &str,
+) -> Result<Sha256Digest, Box<dyn std::error::Error>> {
+    let candidate = route
+        .candidates
+        .iter()
+        .find(|candidate| candidate.provider_id.as_str() == provider_id)
+        .ok_or("rejected candidate missing")?;
+    if candidate.eligible {
+        return Err("expected rejected candidate".into());
+    }
+    Ok(candidate.eligibility_report_digest)
+}
+
+fn remove_provider_assurance(
+    fixture: &mut Fixture,
+    provider_id: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let provider_id: ProtocolId = provider_id.parse()?;
+    let evidence_set_digest = fixture
+        .assurance_sets
+        .iter()
+        .find_map(|(digest, set)| {
+            set.signed_statements
+                .iter()
+                .any(|statement| statement.signer_id == provider_id)
+                .then_some(*digest)
+        })
+        .ok_or("provider assurance set missing")?;
+    let removed_set = fixture
+        .assurance_sets
+        .remove(&evidence_set_digest)
+        .ok_or("provider assurance set disappeared")?;
+    for blob in removed_set.evidence_blobs {
+        fixture.assurance_blobs.remove(&blob.digest);
+    }
+    fixture
+        .verification_keys
+        .retain(|key| key.signer_id != provider_id);
+    let mut registry = VerificationKeyRegistry::default();
+    for key in &fixture.verification_keys {
+        registry.register(key.clone())?;
+    }
+    fixture.registry = registry;
+    Ok(())
 }
 
 fn market_bundle(fixture: &Fixture) -> Result<MarketEvidenceBundleV1, Box<dyn std::error::Error>> {
