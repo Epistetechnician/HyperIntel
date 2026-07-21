@@ -7,6 +7,7 @@ members = [
   "crates/hyperintel-cli",
   "crates/hyperintel-persistence",
   "crates/hyperintel-execution",
+  "crates/hyperintel-execution-journal",
 ]
 
 [workspace.package]
