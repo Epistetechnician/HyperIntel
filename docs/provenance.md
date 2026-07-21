@@ -258,7 +258,10 @@ provider-agent activation seam must run one closure only after current control
 and execution bindings pass and before harness entry. One public read-only
 harness-preflight seam may be added to `hyperintel-execution` only so the
 existing harness and provider-agent use the same validation implementation;
-copying that logic is forbidden. The new composition may
+copying that logic is forbidden. One public read-only persistence preflight may
+likewise be added only so both execution preflight and the mutating replay
+consume share authenticated-admission and consumption-window validation. The
+new composition may
 then bind one exact local runtime, tenant `SUBMIT_INFERENCE` authorization,
 synthetic secret resolution, provider-agent lineage, replay-protected local
 execution, journal terminal, and reconciliation report. No existing source may
