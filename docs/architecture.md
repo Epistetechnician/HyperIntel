@@ -166,9 +166,21 @@ transport controls.
 The contract suite exercises independently selected alpha and beta providers,
 exact-retry suppression, provider-substitution rejection, cancellation,
 deadline, provider failure, and signer failure. It uses no socket, HTTP server,
-provider credential, wallet, chain, custody, funds, or value movement. Safe
-automatic reroute is not implemented: admission binds one provider, so a
-different provider requires a newly routed, newly signed, next-nonce admission.
+provider credential, wallet, chain, custody, funds, or value movement.
+
+`hyperintel-authenticated-reroute-v1` at `379ee98` implements the narrow safe
+lineage to a different provider. It accepts only a self-consistent prior
+`PROVIDER_FAILED` record with the closed `UNAVAILABLE` error and zero released
+chunks. The caller must supply a separately routed and buyer-signed admission
+that preserves buyer, service, and prompt commitment, starts from the prior
+durable after-state, consumes the next sequential nonce, selects a different
+provider, and does not regress evaluation or admission time. The existing
+harness then performs the second durable consume and provider invocation.
+
+Cancellation, deadline, partial output, signer failure, same-provider reuse,
+prompt change, and stale lineage do not qualify. The code neither selects the
+fallback route nor signs the next policy. Automatic/live failover, provider
+health, and external transport remain unimplemented.
 
 V1, V2, and V3 schemas and reconstruction behavior remain available unchanged,
 with selected-path and rejection/fallback golden commitments enforcing that

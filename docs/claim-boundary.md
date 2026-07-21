@@ -47,6 +47,14 @@ implemented local authentication, persistence, and in-process execution
 claims. They grant no HTTP, external provider, credential, chain, settlement,
 custody, funds, or production authority.
 
+The authenticated reroute slice locally proves one narrower claim: a verified
+zero-output provider-`UNAVAILABLE` attempt can link to and execute a separately
+authenticated next-nonce admission for the same buyer, service, and prompt and
+a different selected provider. It rejects cancellation, partial output,
+same-provider reuse, prompt changes, stale replay lineage, and time regression
+before invoking the next provider. It does not select a route, operate a buyer
+signing key, or establish live failover.
+
 ## Unsupported claims
 
 The repository does not establish:
@@ -66,8 +74,8 @@ The repository does not establish:
   harness releases a request only to an injected selected provider and grants
   no external prompt-release authority;
 - full OpenAI API compatibility, an HTTP gateway, external provider transport,
-  live cancellation propagation, automatic failover, provider health, or
-  production provider-agent operation;
+  live cancellation propagation, automatic route selection/failover, provider
+  health, or production provider-agent operation;
 - truth, completeness, representative sampling, independence, or provenance of
   the source observations committed by a V3 reliability artifact;
 - calibration, stationarity, causal validity, or future predictive accuracy of

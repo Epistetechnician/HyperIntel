@@ -93,9 +93,17 @@ receipt reconstruction, and metering reconstruction before deriving the
 existing non-authoritative settlement intent.
 
 Cancelled, late, provider-failed, or receipt-signer-failed attempts contain no
-metering receipt or settlement intent. Automatic failover is intentionally
-absent. Because the admission commits one selected provider and offer, reroute
-requires a new policy decision and next-nonce authenticated admission.
+metering receipt or settlement intent. Because the admission commits one
+selected provider and offer, reroute requires a new policy decision and
+next-nonce authenticated admission.
+
+The implemented reroute lane accepts only the closed zero-output
+`PROVIDER_FAILED/UNAVAILABLE` case. It verifies the prior attempt and admission,
+the exact durable state succession, unchanged buyer/service/prompt bindings, a
+different selected provider, and non-regressing time before passing the new
+admission to the local harness. It rejects cancellation, deadline, partial
+output, signer failure, same-provider reuse, prompt change, and stale lineage.
+Route selection and buyer signing remain caller-owned.
 
 The harness has no HTTP server, socket, ambient credential, external provider,
 live cancellation propagation, wallet, settlement submission, custody, funds,

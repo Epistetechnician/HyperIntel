@@ -153,15 +153,19 @@ A. Its domain objects and execution semantics are inference-native. It copies
 no outcome request, validator manifest, HTTP route, process/OCI runner,
 operator header, development authority, credential adapter, or source schema.
 
-The next authorized local R1 slice is
-`hyperintel-authenticated-reroute-v1`. It may add only a fail-closed lineage
-check from a provider-unavailable, zero-output local attempt to a
-caller-supplied, buyer-authenticated next-nonce admission for a different
-selected provider, followed by the existing hermetic execution harness. It may
-reuse existing HyperIntel records and no additional source repository code.
-Implementation lineage will be recorded only after its contracts and full gate
-pass. The authorization creates no route selection, buyer signing authority,
-HTTP or provider transport, credential custody, settlement, funds, or
+- `379ee98` adds `hyperintel-authenticated-reroute-v1`. It verifies a
+  self-consistent provider-`UNAVAILABLE`, zero-output attempt and its original
+  authenticated admission, then requires a caller-supplied admission with the
+  same buyer, service, and prompt, the prior durable after-state, the next
+  sequential nonce, a different selected provider, and non-regressing time.
+  Only after that lineage passes does the existing local harness consume and
+  invoke the next provider. Contracts cover beta-unavailable to alpha-complete
+  on one durable cursor plus rejection of cancellation/partial output,
+  same-provider reuse, prompt change, and stale lineage.
+
+This slice reuses only existing HyperIntel records and no additional source
+repository code. It adds no route selection, buyer signing authority, HTTP or
+provider transport, health monitor, credential custody, settlement, funds, or
 production authority.
 
 ## Licensing boundary

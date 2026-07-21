@@ -41,6 +41,10 @@ Implemented now:
   applies deterministic cancellation and deadline boundaries, verifies a
   configured provider receipt signature, reconstructs metering, and derives a
   non-authoritative settlement intent;
+- an authenticated reroute lineage from a verified zero-output
+  provider-`UNAVAILABLE` attempt to a caller-supplied, buyer-signed next-nonce
+  admission for the same buyer, service, and prompt and a different selected
+  provider;
 - committed V1–V4 fixtures exercised through the compiled CLI process,
   including caller-trust and fail-closed boundary cases; and
 - a source-hash-bound Z3 4.15.0 two-candidate policy-non-widening check whose
@@ -50,7 +54,8 @@ Still absent: verification of the underlying reliability source observations,
 rollback-resistant or independently anchored replay state, remote replication,
 tenant isolation, production backup and database operations, HTTP gateway,
 external provider runtime, network transport, live streaming or cancellation,
-health and authenticated reroute, execution-session persistence, contracts,
+health and automatic route selection/failover, execution-session persistence,
+contracts,
 custody, funds, external settlement, independent reproduction, and production
 authority. The implemented first R1 tracer is a
 pure-data buyer-policy signature, selected-route admission, and provider-signed
@@ -58,7 +63,7 @@ completed-execution receipt that reconstructs metering without granting
 execution authority. The separate local harness adds deterministic in-process
 request release and partial-stream evidence only after a new durable consume;
 it adds no external execution or settlement authority. Partial-output
-economics, live cancellation, authenticated reroute, execution-session
+economics, live cancellation, automatic reroute, execution-session
 persistence, and external settlement remain outside the implemented slices.
 V1, V2, and V3
 are retained for compatibility, keep their narrower explicit nonclaims and
@@ -369,6 +374,20 @@ not a deployed endpoint or full-compatibility claim.
 Automatic provider substitution is prohibited. The authenticated admission
 commits one provider and offer, so safe reroute requires a fresh route decision
 and a buyer-authenticated next-nonce admission.
+
+The local authenticated reroute slice at `379ee98` verifies that handoff after
+one narrowly classified failure. The prior attempt and admission must verify as
+provider `UNAVAILABLE` with zero chunks. The new admission must preserve buyer,
+service, and prompt commitment; start from the prior durable after-state;
+consume the next sequential nonce; select a different provider; and not regress
+route-evaluation or admission time. Only then does the existing harness consume
+and execute it. The contract advances one cursor from beta failure at nonce 1
+to alpha completion at nonce 2.
+
+Cancellation, deadline, partial output, signer failure, same-provider reuse,
+prompt change, and stale lineage remain non-reroutable. The caller still owns
+route selection and buyer signing; no health monitor, automatic failover, HTTP,
+or external provider transport is added.
 
 ## 9. Provider lifecycle
 
@@ -766,6 +785,11 @@ retry, substitution, cancellation, deadline, provider-failure, and
 signer-failure cases. It has no HTTP, external provider, encrypted transport,
 live cancellation, health, reroute, tenant isolation, credentials, funds, or
 production acceptance and does not satisfy the private-alpha gate by itself.
+
+The authenticated reroute slice at `379ee98` locally exercises the required
+new-admission rule for a zero-output unavailable provider. It does not turn the
+harness into a health system or automatic failover service and does not satisfy
+the private-alpha gate by itself.
 
 ## 19. First 12 weeks
 

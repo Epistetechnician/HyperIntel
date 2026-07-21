@@ -30,6 +30,10 @@ The current repository implements a **local hermetic foundation only**:
   deadline and cancellation boundaries, verifies an injected provider receipt
   signature, reconstructs metering, and derives a non-authoritative settlement
   intent;
+- an authenticated reroute lineage that accepts only a zero-output
+  `UNAVAILABLE` attempt and a caller-supplied, buyer-signed next-nonce
+  admission for the same buyer, service, and prompt but a different selected
+  provider, then executes that admission through the same local harness;
 - an offline-verifiable V1–V4 fixture corpus exercised through the real CLI
   process; and
 - a source-hash-bound, two-candidate Z3 policy-non-widening check.

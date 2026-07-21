@@ -83,9 +83,11 @@ tested before funds are enabled.
 - Unknown or expired policy: deny.
 - Missing or stale assurance: deny or route only to a separately declared lower
   assurance tier; never silently downgrade.
-- Provider disconnect before completion: stop billing at verified usage. A
-  future declared failover policy must create a newly routed, next-nonce
-  admission; it cannot substitute a provider under the old admission.
+- Provider disconnect before completion: stop billing at verified usage. The
+  current local reroute lane permits only a closed provider-`UNAVAILABLE`
+  failure with zero released chunks and a separately signed, next-nonce route
+  to a different provider. Partial output, cancellation, deadline, and signer
+  failure remain non-reroutable. Live policy and transport remain future work.
 - Metering disagreement: withhold disputed delta, preserve evidence, and apply
   the bounded dispute contract.
 - Chain or RPC unavailability: inference may continue only within a buyer's

@@ -22,8 +22,8 @@ funds, or production use.
 ## R1: private execution alpha
 
 Future state slices: HTTP gateway, external provider adapters, encrypted and
-live streaming transport, live cancellation, passive health, authenticated
-reroute, direct-provider mode, production persistence, and production IAM. No
+live streaming transport, live cancellation, passive health, automatic route
+selection, direct-provider mode, production persistence, and production IAM. No
 chain dependency.
 
 The next MVP tranche is authenticated buyer admission, durable atomic replay,
@@ -44,7 +44,7 @@ compare-and-swap, immutable consumption, exact-retry idempotency, competing
 writer rejection, and close/reopen coverage. It has no prompt-release
 authority and no rollback resistance, replication, production backup policy,
 tenant isolation, or production database operations. Gateway/provider sockets,
-live cancellation, authenticated reroute, and external effects remain
+live cancellation, automatic reroute, and external effects remain
 separately gated; R1 is not complete.
 
 The hermetic execution harness landed at `4c4b17f`: text-only OpenAI-shaped
@@ -57,10 +57,18 @@ selected alpha and beta providers plus provider, signer, and substitution
 failures without sockets, credentials, funds, or value movement.
 
 This closes only the in-process R1 logic path. The gateway, external provider
-transport, live streaming/cancellation, health, authenticated reroute, tenant
+transport, live streaming/cancellation, health, automatic reroute, tenant
 isolation, production operations, sustained soak, and operator acceptance
 remain open. Reroute cannot reuse an admission bound to another provider; it
 requires a new route and next-nonce buyer-authenticated admission.
+
+The narrow authenticated reroute landed at `379ee98`. A zero-output beta
+`UNAVAILABLE` attempt at nonce 1 can link to a separately signed alpha admission
+at nonce 2 and complete on the same durable cursor. The lineage freezes buyer,
+service, prompt, state succession, provider change, and time ordering.
+Cancellation/partial output, same-provider reuse, prompt change, and stale
+lineage are rejected. Route selection, policy signing, live failover, health,
+and transport remain future work.
 
 ## R2: HyperEVM testnet
 

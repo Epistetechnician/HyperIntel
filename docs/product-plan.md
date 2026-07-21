@@ -114,6 +114,15 @@ credential operations, production persistence, funds, or settlement adapter.
 The admission binds one provider; failover must route and authenticate a new
 next-nonce admission rather than substitute providers under the old admission.
 
+The authenticated reroute slice at `379ee98` now verifies and exercises that
+exact local handoff for the safest case: provider `UNAVAILABLE` with zero
+released chunks. A separately built and buyer-signed nonce-2 admission keeps
+the buyer, service, and prompt commitment, selects the other provider, starts
+from nonce 1's durable after-state, and completes through the existing harness.
+Cancellation, partial output, same-provider reuse, changed prompt, and stale
+lineage fail before invocation. The slice does not discover the next provider,
+sign the policy, monitor health, or operate live transport.
+
 ## System boundary
 
 The marketplace is split so no component receives authority merely because it

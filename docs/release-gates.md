@@ -127,11 +127,21 @@ and signer failure without metering or settlement artifacts. Separate alpha
 and beta selections are exercised with no sockets, credentials, funds, or
 value movement.
 
+Authenticated reroute is **Implemented** at `379ee98` and locally checked by
+three direct contracts plus the full repository gate. Only a zero-output
+provider-`UNAVAILABLE` attempt can link to the separately routed,
+buyer-authenticated next nonce for an unchanged buyer, service, and prompt and
+a different provider. The successful contract advances one durable cursor from
+beta failure at nonce 1 to alpha completion at nonce 2. Cancellation/partial
+output, same-provider reuse, changed prompt, and stale lineage fail before the
+next provider is invoked.
+
 R1 remains open. The local store is not rollback-resistant, replicated,
 tenant-isolated, encrypted by this crate, backed up, independently anchored, or
 production operated. The harness is not an HTTP gateway, external provider
 runtime, encrypted transport, live stream/cancellation implementation, health
-system, or safe failover path. No production IAM, tenant isolation, external
+system, or automatic failover path. The reroute slice does not select or sign
+the next route. No production IAM, tenant isolation, external
 receipt reconciliation, sustained two-provider traffic, incident runbook,
 synthetic no-funds soak, independent reproduction, or private-alpha operator
 acceptance has been implemented or exercised.
