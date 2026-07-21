@@ -248,6 +248,24 @@ health observation, automatic routing/failover, new replay authority, signing-
 key custody, settlement, funds, deployment, production identity, or production
 authority was added.
 
+Queued after hermetic provider-agent control is
+`hyperintel-hermetic-runtime-composition-v1`. It may reuse only the committed
+runtime-configuration, tenant-IAM, operator-secret, provider-agent, local
+execution, replay, journal, and reconciliation public contracts. A narrow
+generic journal-attempt seam must retain sole ownership of start/recovery,
+single invocation, actual replay inspection, and terminalization. A narrow
+provider-agent activation seam must run one closure only after current control
+and execution bindings pass and before harness entry. The new composition may
+then bind one exact local runtime, tenant `SUBMIT_INFERENCE` authorization,
+synthetic secret resolution, provider-agent lineage, replay-protected local
+execution, journal terminal, and reconciliation report. No existing source may
+be copied and no wrapper may be bypassed or invoked twice. Only fixture keys,
+synthetic bytes, injected ports, and in-memory or temporary local SQLite are
+authorized in normal tests. No socket, ambient credential, real secret
+adapter, external provider, remote database, live transport, automatic
+routing/reroute, cross-database atomicity, settlement, funds, deployment, or
+production authority may be added.
+
 ## Licensing boundary
 
 Neither source checkout exposed a root license file during the migration audit.

@@ -233,6 +233,50 @@ cancellation transport, health observation, automatic route selection or
 failover, new durable replay mechanism, receipt-signing key custody,
 settlement, funds, deployment, production identity, or production authority.
 
+## `hyperintel-hermetic-runtime-composition-v1`
+
+`crates/hyperintel-runtime-composition/**`, its workspace membership and exact
+dependency pins in `Cargo.toml` and `Cargo.lock`, the focused-test command in
+`package.json`, `docs/runtime-composition.md`, one generic journal-attempt seam
+in `crates/hyperintel-execution-journal/src/lib.rs` with direct coverage in
+`crates/hyperintel-execution-journal/tests/durable_journal.rs`, and one atomic
+post-control/pre-harness activation seam in
+`crates/hyperintel-provider-agent/src/execution.rs` with its export in
+`crates/hyperintel-provider-agent/src/lib.rs` and direct coverage in
+`crates/hyperintel-provider-agent/tests/provider_agent.rs`: deterministic
+composition of one validated local runtime configuration, one exact tenant
+`SUBMIT_INFERENCE` authorization, one signed operator-secret authorization and
+injected synthetic resolution, one signed provider-agent control lineage, one
+durable replay consumption through the existing harness, one metadata-only
+journal start and terminal, one receipt reconciliation, and one opaque
+identity-only composition report.
+
+The generic journal seam must exclusively own start/recovery inspection, one
+caller-supplied async attempt, actual replay inspection, and terminalization;
+it must not retry, resume, or duplicate execution, and the existing journaled
+harness must delegate to it without changing its public behavior. The provider-
+agent activation hook must run only after current signed control and exact
+execution bindings pass, but before harness entry or replay consumption. It
+must invoke at most one activation closure and must not expose a reusable
+verified-control token. The composition uses that hook to resolve one synthetic
+secret into a private nonserializable secret-bound injected provider adapter;
+activation denial fails before replay, provider, or signer invocation. The
+exact runtime/configuration, tenant, principal, audience, operation, admission,
+request/prompt, selected route/provider/offer, agent, receipt key, secret
+reference/purpose, evaluation time, trust, revocation, and checkpoint
+identities must agree. Evaluation time equals replay-consumption time.
+
+Normal tests may use only validated local-hermetic configuration, in-memory or
+temporary local SQLite databases, fixture keys, fixture resolvers, synthetic
+secret bytes, and injected provider/signer implementations. The slice
+authorizes no socket, HTTP, TLS, ambient environment/file/keychain credential,
+real KMS/HSM/cloud secret manager, external provider, live streaming or
+cancellation transport, automatic routing or reroute, health observation,
+tenant-isolation claim, remote database, cross-database atomicity, automatic
+crash resume, settlement submission, wallet, chain, custody, funds,
+deployment, production credential, production identity, or production
+authority.
+
 ## Reserved future slices
 
 The following names reserve no implementation authority:
