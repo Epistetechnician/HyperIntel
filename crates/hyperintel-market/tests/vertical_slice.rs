@@ -18,8 +18,11 @@ use hyperintel_core::{
 };
 use hyperintel_market::{
     ExecutionStatusV1, MarketEvidenceBundleV1, MeteringReceiptDraftV1, RouteDecisionV1,
-    RoutingContextV1, build_market_evidence_bundle_v1, build_metering_receipt_v1,
-    derive_settlement_intent_v1, select_route_v1, verify_market_evidence_bundle_v1,
+    RoutingContextV1, RoutingError, SignedCapacityOfferV1, SignedMarketEvidenceBundleV2,
+    SignedRoutingContextV1, build_market_evidence_bundle_v1, build_metering_receipt_v1,
+    build_signed_market_evidence_bundle_v2, derive_settlement_intent_v1, select_route_v1,
+    select_signed_route_v1, verify_market_evidence_bundle_v1,
+    verify_signed_market_evidence_bundle_v2,
 };
 
 struct Fixture {
@@ -27,6 +30,7 @@ struct Fixture {
     service: ServiceSpecV1,
     providers: BTreeMap<ProtocolId, ProviderIdentityV1>,
     offers: Vec<CapacityOfferV1>,
+    signed_offers: Vec<SignedCapacityOfferV1>,
     policy: InferenceRequestPolicyV1,
     assurance_sets: BTreeMap<Sha256Digest, AssuranceEvidenceSetV1>,
     assurance_blobs: BTreeMap<Sha256Digest, Vec<u8>>,
@@ -139,6 +143,221 @@ fn contract_vertical_slice_reconstructs_route_metering_settlement_and_evidence()
     let encoded = serde_json::to_vec(&bundle)?;
     let decoded: MarketEvidenceBundleV1 = serde_json::from_slice(&encoded)?;
     assert_eq!(decoded, bundle);
+    Ok(())
+}
+
+#[test]
+fn contract_signed_offer_v2_reconstructs_and_has_a_stable_golden_digest()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = fixture()?;
+    let bundle = signed_bundle(&fixture)?;
+    verify_signed_market_evidence_bundle_v2(&bundle, &fixture.assurance_blobs, &fixture.registry)?;
+    assert!(
+        !bundle
+            .explicit_nonclaims
+            .iter()
+            .any(|claim| claim == "no-capacity-offer-signature-verification")
+    );
+    assert_eq!(
+        bundle.bundle_digest.to_hex(),
+        "781fab0921e649922f53ceb67f9037ddfd0f039922d3663ef54b29f7bd042cab"
+    );
+    let encoded = serde_json::to_vec(&bundle)?;
+    let decoded: SignedMarketEvidenceBundleV2 = serde_json::from_slice(&encoded)?;
+    assert_eq!(decoded, bundle);
+
+    let mut reversed = fixture.signed_offers.clone();
+    reversed.reverse();
+    assert_eq!(
+        signed_route(&fixture)?,
+        signed_route_with(&fixture, &reversed, &fixture.registry)?
+    );
+    Ok(())
+}
+
+#[test]
+fn contract_invalid_or_tampered_capacity_offer_signature_cannot_win()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = fixture()?;
+    assert_eq!(
+        signed_route(&fixture)?.selected_provider_id.as_str(),
+        "provider:beta"
+    );
+
+    let beta_index = fixture
+        .signed_offers
+        .iter()
+        .position(|signed_offer| signed_offer.offer.provider_id.as_str() == "provider:beta")
+        .ok_or("beta signed offer missing")?;
+
+    let mut cases = Vec::new();
+
+    let mut subject_tamper = fixture.signed_offers.clone();
+    subject_tamper[beta_index].statement.subject_digest = Sha256Digest::from_bytes([99; 32]);
+    cases.push(subject_tamper);
+
+    let mut wrong_signer = fixture.signed_offers.clone();
+    wrong_signer[beta_index].statement.signer_id = "provider:alpha".parse()?;
+    cases.push(wrong_signer);
+
+    let mut wrong_key = fixture.signed_offers.clone();
+    wrong_key[beta_index].statement.key_id = "key:alpha-offer".parse()?;
+    cases.push(wrong_key);
+
+    let mut expired = fixture.signed_offers.clone();
+    expired[beta_index].statement.expires_at = timestamp("2026-07-20T11:59:59Z")?;
+    cases.push(expired);
+
+    let mut offer_tamper = fixture.signed_offers.clone();
+    offer_tamper[beta_index].offer.fixed_request_fee = AtomicAmount(0);
+    cases.push(offer_tamper);
+
+    for invalid_offers in cases {
+        let decision = signed_route_with(&fixture, &invalid_offers, &fixture.registry)?;
+        assert_eq!(decision.selected_provider_id.as_str(), "provider:alpha");
+    }
+
+    let mut missing_statement = serde_json::to_value(&fixture.signed_offers[beta_index])?;
+    missing_statement
+        .as_object_mut()
+        .ok_or("signed offer must serialize as an object")?
+        .remove("statement");
+    assert!(serde_json::from_value::<SignedCapacityOfferV1>(missing_statement).is_err());
+
+    let mut revoked_registry = VerificationKeyRegistry::default();
+    for mut key in fixture.verification_keys.clone() {
+        if key.signer_id.as_str() == "provider:beta" && key.key_id.as_str() == "key:beta-offer" {
+            key.revoked_at = Some(fixture.evaluated_at.clone());
+        }
+        revoked_registry.register(key)?;
+    }
+    let revoked_route = signed_route_with(&fixture, &fixture.signed_offers, &revoked_registry)?;
+    assert_eq!(
+        revoked_route.selected_provider_id.as_str(),
+        "provider:alpha"
+    );
+    Ok(())
+}
+
+#[test]
+fn contract_only_verified_offer_sequence_equivocation_blocks_the_batch()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = fixture()?;
+    let alpha_index = fixture
+        .signed_offers
+        .iter()
+        .position(|signed_offer| signed_offer.offer.provider_id.as_str() == "provider:alpha")
+        .ok_or("alpha signed offer missing")?;
+    let beta_index = fixture
+        .signed_offers
+        .iter()
+        .position(|signed_offer| signed_offer.offer.provider_id.as_str() == "provider:beta")
+        .ok_or("beta signed offer missing")?;
+    let alpha = &fixture.signed_offers[alpha_index];
+
+    let mut second_alpha_offer = alpha.offer.clone();
+    second_alpha_offer.offer_id = "offer:alpha-equivocation".parse()?;
+    second_alpha_offer.fixed_request_fee = second_alpha_offer
+        .fixed_request_fee
+        .checked_add(AtomicAmount(1))?;
+    let second_alpha = signed_capacity_offer(
+        second_alpha_offer,
+        50,
+        alpha.statement.assurance_envelope_digest,
+        alpha.statement.sequence,
+    )?;
+    let mut verified_equivocation = fixture.signed_offers.clone();
+    verified_equivocation.push(second_alpha);
+    assert!(matches!(
+        signed_route_with(
+            &fixture,
+            &verified_equivocation,
+            &fixture.registry
+        ),
+        Err(error)
+            if error
+                .downcast_ref::<RoutingError>()
+                .is_some_and(|routing_error| matches!(
+                    routing_error,
+                    RoutingError::VerifiedOfferSigningSequenceEquivocation
+                ))
+    ));
+
+    let mut spoofed_duplicate = fixture.signed_offers.clone();
+    spoofed_duplicate[beta_index].statement.signer_id = alpha.statement.signer_id.clone();
+    spoofed_duplicate[beta_index].statement.key_id = alpha.statement.key_id.clone();
+    spoofed_duplicate[beta_index].statement.sequence = alpha.statement.sequence;
+    let fallback = signed_route_with(&fixture, &spoofed_duplicate, &fixture.registry)?;
+    assert_eq!(fallback.selected_provider_id.as_str(), "provider:alpha");
+    Ok(())
+}
+
+#[test]
+fn contract_signed_bundle_rejects_offer_signature_and_offer_tamper()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = fixture()?;
+    let bundle = signed_bundle(&fixture)?;
+
+    let mut signature_tamper = bundle.clone();
+    let replacement = if signature_tamper.offers[0]
+        .statement
+        .signature_hex
+        .starts_with("00")
+    {
+        "01"
+    } else {
+        "00"
+    };
+    signature_tamper.offers[0]
+        .statement
+        .signature_hex
+        .replace_range(0..2, replacement);
+    assert!(
+        verify_signed_market_evidence_bundle_v2(
+            &signature_tamper,
+            &fixture.assurance_blobs,
+            &fixture.registry
+        )
+        .is_err()
+    );
+
+    let mut offer_tamper = bundle;
+    offer_tamper.offers[0].offer.available_request_units = offer_tamper.offers[0]
+        .offer
+        .available_request_units
+        .checked_add(1)
+        .ok_or("fixture capacity overflow")?;
+    assert!(
+        verify_signed_market_evidence_bundle_v2(
+            &offer_tamper,
+            &fixture.assurance_blobs,
+            &fixture.registry
+        )
+        .is_err()
+    );
+    Ok(())
+}
+
+#[test]
+fn contract_v2_bundle_reconstructs_rejected_unknown_key_without_trusting_it()
+-> Result<(), Box<dyn std::error::Error>> {
+    let fixture = fixture()?;
+    let mut offers = fixture.signed_offers.clone();
+    let beta = offers
+        .iter_mut()
+        .find(|signed_offer| signed_offer.offer.provider_id.as_str() == "provider:beta")
+        .ok_or("beta signed offer missing")?;
+    beta.statement.key_id = "key:attacker-claimed".parse()?;
+
+    let bundle = signed_bundle_with(&fixture, &offers)?;
+    assert_eq!(bundle.route.selected_provider_id.as_str(), "provider:alpha");
+    assert!(
+        !bundle
+            .verification_keys
+            .iter()
+            .any(|key| key.key_id.as_str() == "key:attacker-claimed")
+    );
+    verify_signed_market_evidence_bundle_v2(&bundle, &fixture.assurance_blobs, &fixture.registry)?;
     Ok(())
 }
 
@@ -310,6 +529,93 @@ fn route(fixture: &Fixture) -> Result<RouteDecisionV1, Box<dyn std::error::Error
         assurance_blobs: &fixture.assurance_blobs,
         verification_keys: &fixture.registry,
     })?)
+}
+
+fn signed_route(fixture: &Fixture) -> Result<RouteDecisionV1, Box<dyn std::error::Error>> {
+    signed_route_with(fixture, &fixture.signed_offers, &fixture.registry)
+}
+
+fn signed_route_with(
+    fixture: &Fixture,
+    offers: &[SignedCapacityOfferV1],
+    registry: &VerificationKeyRegistry,
+) -> Result<RouteDecisionV1, Box<dyn std::error::Error>> {
+    Ok(select_signed_route_v1(&SignedRoutingContextV1 {
+        evaluated_at: &fixture.evaluated_at,
+        service: &fixture.service,
+        providers: &fixture.providers,
+        offers,
+        policy: &fixture.policy,
+        assurance_sets: &fixture.assurance_sets,
+        assurance_blobs: &fixture.assurance_blobs,
+        verification_keys: registry,
+    })?)
+}
+
+fn signed_bundle(
+    fixture: &Fixture,
+) -> Result<SignedMarketEvidenceBundleV2, Box<dyn std::error::Error>> {
+    signed_bundle_with(fixture, &fixture.signed_offers)
+}
+
+fn signed_bundle_with(
+    fixture: &Fixture,
+    offers: &[SignedCapacityOfferV1],
+) -> Result<SignedMarketEvidenceBundleV2, Box<dyn std::error::Error>> {
+    let route = signed_route_with(fixture, offers, &fixture.registry)?;
+    let provider = fixture
+        .providers
+        .get(&route.selected_provider_id)
+        .ok_or("selected provider missing")?;
+    let offer = fixture
+        .offers
+        .iter()
+        .find(|offer| offer.digest().ok() == Some(route.selected_offer_digest))
+        .ok_or("selected offer missing")?;
+    let metering = build_metering_receipt_v1(
+        &fixture.service,
+        provider,
+        offer,
+        &fixture.policy,
+        &route,
+        MeteringReceiptDraftV1 {
+            started_at: timestamp("2026-07-20T12:00:01Z")?,
+            first_token_at: timestamp("2026-07-20T12:00:02Z")?,
+            completed_at: timestamp("2026-07-20T12:00:04Z")?,
+            input_tokens: 900,
+            output_tokens: 400,
+            execution_status: ExecutionStatusV1::Completed,
+            prompt_digest: fixture.policy.prompt_digest,
+            output_digest: Sha256Digest::from_bytes([31; 32]),
+            provider_metering_evidence_digest: Sha256Digest::from_bytes([32; 32]),
+            buyer_observation_digest: Some(Sha256Digest::from_bytes([33; 32])),
+        },
+    )?;
+    let settlement = derive_settlement_intent_v1(
+        &fixture.service,
+        provider,
+        offer,
+        &fixture.policy,
+        &route,
+        &metering,
+        timestamp("2026-07-20T13:00:00Z")?,
+    )?;
+    Ok(build_signed_market_evidence_bundle_v2(
+        fixture.evaluated_at.clone(),
+        fixture.service.clone(),
+        fixture.providers.clone(),
+        offers.to_vec(),
+        fixture.policy.clone(),
+        fixture.assurance_sets.clone(),
+        fixture.verification_keys.clone(),
+        route,
+        metering,
+        settlement,
+        vec![
+            "capacity-offer authenticity is checked only against caller-supplied keys".to_owned(),
+            "success probability remains an unverified declared input".to_owned(),
+        ],
+    )?)
 }
 
 fn assert_authorization_windows(
@@ -488,12 +794,14 @@ fn fixture() -> Result<Fixture, Box<dyn std::error::Error>> {
     let mut assurance_blobs = BTreeMap::new();
     let mut registry = VerificationKeyRegistry::default();
     let mut verification_keys = Vec::new();
+    let mut provider_signing_material = BTreeMap::new();
     for (index, provider) in providers.values().enumerate() {
         let provider_digest = provider.digest()?;
+        let key_byte = 50_u8
+            .checked_add(u8::try_from(index)?)
+            .ok_or("key overflow")?;
         let built = signed_evidence_set(
-            50_u8
-                .checked_add(u8::try_from(index)?)
-                .ok_or("key overflow")?,
+            key_byte,
             provider.provider_id.clone(),
             provider.offer_key_id.clone(),
             "provider-identity".parse()?,
@@ -504,6 +812,10 @@ fn fixture() -> Result<Fixture, Box<dyn std::error::Error>> {
             AssuranceRootClassV1::ProviderKey,
             format!("provider authorization {index}").into_bytes(),
         )?;
+        provider_signing_material.insert(
+            provider.provider_id.clone(),
+            (key_byte, built.0.envelope.digest()?),
+        );
         registry.register(built.2.clone())?;
         verification_keys.push(built.2);
         assurance_blobs.insert(built.1.0, built.1.1);
@@ -526,11 +838,31 @@ fn fixture() -> Result<Fixture, Box<dyn std::error::Error>> {
     assurance_blobs.insert(service_evidence.1.0, service_evidence.1.1);
     assurance_sets.insert(service_evidence.0.evidence_set_digest, service_evidence.0);
 
+    let signed_offers = offers
+        .iter()
+        .enumerate()
+        .map(|(index, offer)| {
+            let (key_byte, envelope_digest) = provider_signing_material
+                .get(&offer.provider_id)
+                .copied()
+                .ok_or("provider signing material missing")?;
+            signed_capacity_offer(
+                offer.clone(),
+                key_byte,
+                envelope_digest,
+                u64::try_from(index)?
+                    .checked_add(1)
+                    .ok_or("sequence overflow")?,
+            )
+        })
+        .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
+
     Ok(Fixture {
         evaluated_at,
         service,
         providers,
         offers,
+        signed_offers,
         policy,
         assurance_sets,
         assurance_blobs,
@@ -615,6 +947,43 @@ fn signed_evidence_set(
         Sha256Digest::from_bytes([90; 32]),
     )?;
     Ok((set, (evidence_ref.digest, evidence_bytes), registered))
+}
+
+fn signed_capacity_offer(
+    offer: CapacityOfferV1,
+    key_byte: u8,
+    provider_assurance_envelope_digest: Sha256Digest,
+    sequence: u64,
+) -> Result<SignedCapacityOfferV1, Box<dyn std::error::Error>> {
+    let signing_key = SigningKey::from_bytes(&[key_byte; 32]);
+    let mut statement = SignedStatementV1 {
+        schema_version: "hyperintel.signed-statement.v1".to_owned(),
+        subject_kind: "capacity-offer".parse()?,
+        subject_digest: offer.digest()?,
+        assurance_envelope_digest: provider_assurance_envelope_digest,
+        issued_at: timestamp("2026-07-20T10:00:00Z")?,
+        expires_at: timestamp("2026-07-20T23:59:59Z")?,
+        sequence,
+        signer_id: offer.provider_id.clone(),
+        key_id: format!(
+            "key:{}-offer",
+            offer
+                .provider_id
+                .as_str()
+                .strip_prefix("provider:")
+                .ok_or("fixture provider prefix missing")?
+        )
+        .parse()?,
+        algorithm: "ed25519".to_owned(),
+        signature_hex: String::new(),
+    };
+    statement.signature_hex =
+        HEXLOWER.encode(&signing_key.sign(&statement.signing_message()?).to_bytes());
+    Ok(SignedCapacityOfferV1 {
+        schema_version: "hyperintel.signed-capacity-offer.v1".to_owned(),
+        offer,
+        statement,
+    })
 }
 
 fn timestamp(value: &str) -> Result<UtcTimestamp, Box<dyn std::error::Error>> {

@@ -12,7 +12,7 @@ use hyperintel_core::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::MARKET_STATE_SLICE_V1;
+use crate::{MARKET_STATE_SLICE_V1, SignedCapacityOfferV1, verify_signed_capacity_offer_v1};
 
 /// Complete pure-data routing inputs.
 pub struct RoutingContextV1<'a> {
@@ -24,6 +24,26 @@ pub struct RoutingContextV1<'a> {
     pub providers: &'a BTreeMap<hyperintel_core::ProtocolId, ProviderIdentityV1>,
     /// Candidate signed declarations. Cryptographic transport is external.
     pub offers: &'a [CapacityOfferV1],
+    /// Buyer policy and economic authorization.
+    pub policy: &'a InferenceRequestPolicyV1,
+    /// Generic assurance evidence sets keyed by evidence-set digest.
+    pub assurance_sets: &'a BTreeMap<Sha256Digest, AssuranceEvidenceSetV1>,
+    /// Content-addressed evidence bytes.
+    pub assurance_blobs: &'a BTreeMap<Sha256Digest, Vec<u8>>,
+    /// Caller-owned verification-key registry.
+    pub verification_keys: &'a VerificationKeyRegistry,
+}
+
+/// Complete pure-data routing inputs whose offers must authenticate before admission.
+pub struct SignedRoutingContextV1<'a> {
+    /// Explicit evaluation time. No ambient clock is read.
+    pub evaluated_at: &'a UtcTimestamp,
+    /// Required service semantics.
+    pub service: &'a ServiceSpecV1,
+    /// Provider registry snapshot keyed by provider ID.
+    pub providers: &'a BTreeMap<hyperintel_core::ProtocolId, ProviderIdentityV1>,
+    /// Candidate offers with provider signatures over their exact canonical digests.
+    pub offers: &'a [SignedCapacityOfferV1],
     /// Buyer policy and economic authorization.
     pub policy: &'a InferenceRequestPolicyV1,
     /// Generic assurance evidence sets keyed by evidence-set digest.
@@ -58,6 +78,8 @@ pub enum EligibilityFailureV1 {
     ProviderBindingMismatch,
     /// Offer does not bind the required service.
     ServiceBindingMismatch,
+    /// Provider authentication of the exact offer is absent or invalid.
+    OfferSignatureInvalid,
     /// Offer is not valid at evaluation time.
     OfferOutsideValidity,
     /// Offer has no capacity.
@@ -227,6 +249,9 @@ pub enum RoutingError {
     /// Duplicate canonical offer identity.
     #[error("duplicate offer identity")]
     DuplicateOffer,
+    /// A verified provider key signed distinct offer digests at one logical sequence.
+    #[error("verified capacity-offer signing sequence equivocation")]
+    VerifiedOfferSigningSequenceEquivocation,
     /// Required provider is absent.
     #[error("selected provider is absent")]
     ProviderUnknown,
@@ -248,6 +273,51 @@ pub enum RoutingError {
 /// Returns on duplicate identity, canonicalization, arithmetic, or no eligible
 /// offer. Ineligible offers remain visible in the decision candidate set.
 pub fn select_route_v1(context: &RoutingContextV1<'_>) -> Result<RouteDecisionV1, RoutingError> {
+    select_route_internal(context, None)
+}
+
+/// Select among offers only after provider-key authentication of each exact offer digest.
+///
+/// Invalid signatures become non-compensable eligibility failures. A cheaper unsigned,
+/// tampered, cross-provider, wrong-key, expired, revoked, or assurance-unbound offer cannot
+/// win. This remains a pure-data local decision and grants no execution authority.
+///
+/// # Errors
+///
+/// Returns on duplicate offer identity, canonicalization, arithmetic, or no eligible
+/// signed offer.
+pub fn select_signed_route_v1(
+    context: &SignedRoutingContextV1<'_>,
+) -> Result<RouteDecisionV1, RoutingError> {
+    let mut offers = Vec::with_capacity(context.offers.len());
+    let mut signed_by_digest = BTreeMap::new();
+    for signed_offer in context.offers {
+        let offer_digest = signed_offer.offer.digest()?;
+        if signed_by_digest
+            .insert(offer_digest, signed_offer)
+            .is_some()
+        {
+            return Err(RoutingError::DuplicateOffer);
+        }
+        offers.push(signed_offer.offer.clone());
+    }
+    let unsigned_context = RoutingContextV1 {
+        evaluated_at: context.evaluated_at,
+        service: context.service,
+        providers: context.providers,
+        offers: &offers,
+        policy: context.policy,
+        assurance_sets: context.assurance_sets,
+        assurance_blobs: context.assurance_blobs,
+        verification_keys: context.verification_keys,
+    };
+    select_route_internal(&unsigned_context, Some(&signed_by_digest))
+}
+
+fn select_route_internal(
+    context: &RoutingContextV1<'_>,
+    signed_offers: Option<&BTreeMap<Sha256Digest, &SignedCapacityOfferV1>>,
+) -> Result<RouteDecisionV1, RoutingError> {
     let service_digest = context.service.digest()?;
     let policy_digest = context.policy.digest()?;
     let mut reports = Vec::with_capacity(context.offers.len());
@@ -262,9 +332,13 @@ pub fn select_route_v1(context: &RoutingContextV1<'_>) -> Result<RouteDecisionV1
             offer,
             service_digest,
             policy_digest,
+            signed_offers,
         )?);
     }
     reports.sort_by_key(|report| report.offer_digest);
+    if let Some(signed_offers) = signed_offers {
+        reject_verified_signing_sequence_equivocation(&reports, signed_offers)?;
+    }
 
     let chosen = reports
         .iter()
@@ -339,6 +413,7 @@ fn evaluate_offer(
     offer: &CapacityOfferV1,
     service_digest: Sha256Digest,
     policy_digest: Sha256Digest,
+    signed_offers: Option<&BTreeMap<Sha256Digest, &SignedCapacityOfferV1>>,
 ) -> Result<EligibilityReportV1, RoutingError> {
     let offer_digest = offer.digest()?;
     let mut failures = BTreeSet::new();
@@ -353,7 +428,15 @@ fn evaluate_offer(
 
     let provider = context.providers.get(&offer.provider_id);
     let provider_identity_digest = provider.and_then(|value| value.digest().ok());
-    evaluate_provider_constraints(context, offer, service_digest, provider, &mut failures);
+    evaluate_provider_constraints(
+        context,
+        offer,
+        offer_digest,
+        service_digest,
+        provider,
+        signed_offers,
+        &mut failures,
+    );
 
     let cost = if let Ok(cost) = quote_max_v1(offer, context.policy) {
         if cost.buyer_quote_max > context.policy.max_total_cost {
@@ -463,8 +546,10 @@ fn evaluate_product_constraints(
 fn evaluate_provider_constraints(
     context: &RoutingContextV1<'_>,
     offer: &CapacityOfferV1,
+    offer_digest: Sha256Digest,
     service_digest: Sha256Digest,
     provider: Option<&ProviderIdentityV1>,
+    signed_offers: Option<&BTreeMap<Sha256Digest, &SignedCapacityOfferV1>>,
     failures: &mut BTreeSet<EligibilityFailureV1>,
 ) {
     if let Some(provider) = provider {
@@ -503,19 +588,73 @@ fn evaluate_provider_constraints(
         {
             failures.insert(EligibilityFailureV1::ProviderDenied);
         }
-        if verify_offer_assurance(context, provider, service_digest).is_err() {
+        if let Ok(provider_envelope_digest) =
+            verify_offer_assurance(context, provider, service_digest)
+        {
+            if let Some(signed_offers) = signed_offers {
+                let signature_is_valid =
+                    signed_offers
+                        .get(&offer_digest)
+                        .is_some_and(|signed_offer| {
+                            verify_signed_capacity_offer_v1(
+                                signed_offer,
+                                provider,
+                                provider_envelope_digest,
+                                context.verification_keys,
+                                context.evaluated_at,
+                            )
+                            .is_ok()
+                        });
+                if !signature_is_valid {
+                    failures.insert(EligibilityFailureV1::OfferSignatureInvalid);
+                }
+            }
+        } else {
             failures.insert(EligibilityFailureV1::AssurancePolicyRejected);
+            if signed_offers.is_some() {
+                failures.insert(EligibilityFailureV1::OfferSignatureInvalid);
+            }
         }
     } else {
         failures.insert(EligibilityFailureV1::ProviderUnknown);
+        if signed_offers.is_some() {
+            failures.insert(EligibilityFailureV1::OfferSignatureInvalid);
+        }
     }
+}
+
+fn reject_verified_signing_sequence_equivocation(
+    reports: &[EligibilityReportV1],
+    signed_offers: &BTreeMap<Sha256Digest, &SignedCapacityOfferV1>,
+) -> Result<(), RoutingError> {
+    let mut verified_sequences = BTreeSet::new();
+    for report in reports {
+        if report
+            .failures
+            .contains(&EligibilityFailureV1::OfferSignatureInvalid)
+        {
+            continue;
+        }
+        let Some(signed_offer) = signed_offers.get(&report.offer_digest) else {
+            continue;
+        };
+        let sequence_identity = (
+            signed_offer.statement.signer_id.clone(),
+            signed_offer.statement.key_id.clone(),
+            signed_offer.statement.sequence,
+        );
+        if !verified_sequences.insert(sequence_identity) {
+            return Err(RoutingError::VerifiedOfferSigningSequenceEquivocation);
+        }
+    }
+    Ok(())
 }
 
 fn verify_offer_assurance(
     context: &RoutingContextV1<'_>,
     provider: &ProviderIdentityV1,
     service_digest: Sha256Digest,
-) -> Result<(), ()> {
+) -> Result<Sha256Digest, ()> {
     let provider_digest = provider.digest().map_err(|_| ())?;
     let provider_claim = AssuranceClaimV1 {
         subject_digest: provider_digest,
@@ -602,7 +741,7 @@ fn verify_offer_assurance(
         },
     )
     .map_err(|_| ())?;
-    Ok(())
+    provider_set.envelope.digest().map_err(|_| ())
 }
 
 pub(crate) fn quote_max_v1(

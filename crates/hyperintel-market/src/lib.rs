@@ -5,20 +5,26 @@
 
 mod evidence;
 mod metering;
+mod offer_admission;
 mod routing;
 mod settlement;
 
 pub use evidence::{
-    MarketEvidenceBundleV1, MarketEvidenceError, build_market_evidence_bundle_v1,
-    verify_market_evidence_bundle_v1,
+    MarketEvidenceBundleV1, MarketEvidenceError, SignedMarketEvidenceBundleV2,
+    build_market_evidence_bundle_v1, build_signed_market_evidence_bundle_v2,
+    verify_market_evidence_bundle_v1, verify_signed_market_evidence_bundle_v2,
 };
 pub use metering::{
     ExecutionStatusV1, MeteringError, MeteringReceiptDraftV1, MeteringReceiptV1,
     build_metering_receipt_v1, validate_metering_receipt_v1,
 };
+pub use offer_admission::{
+    OfferAdmissionError, SignedCapacityOfferV1, verify_signed_capacity_offer_v1,
+};
 pub use routing::{
     CostQuoteV1, EligibilityFailureV1, EligibilityReportV1, OfferRouteRecordV1, RouteDecisionV1,
-    RoutingContextV1, RoutingError, select_route_v1,
+    RoutingContextV1, RoutingError, SignedRoutingContextV1, select_route_v1,
+    select_signed_route_v1,
 };
 pub use settlement::{
     SettlementError, SettlementIntentV1, derive_settlement_intent_v1, validate_settlement_intent_v1,
