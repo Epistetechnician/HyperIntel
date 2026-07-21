@@ -2,18 +2,33 @@
 
 ## R0: local market kernel
 
-Implemented local target: canonical domain objects, assurance envelopes,
-provider-key signed-offer admission, routing, receipts, settlement intent,
-portable V1/V2 evidence, verifier-signed typed reliability artifacts and V3
-evidence, CLI verification, and hermetic tests. Remaining R0 work includes a
-hermetic replay-state transition, fuller route rejection records, and direct
-CLI-process coverage.
+Complete local implementation target: canonical domain objects, assurance
+envelopes, provider-key signed-offer admission, reliability-qualified routing,
+receipts, settlement intent, compatible V1/V2/V3 evidence, and additive V4
+evidence. V4 retains every typed eligibility report for selected and
+all-rejected evaluations, binds the result to a deterministic caller-supplied
+replay-state transition, and is exercised by committed fixtures through the
+compiled CLI process for every V1–V4 schema. A source-hash-bound Z3 4.15.0 test
+checks one bounded two-candidate policy-non-widening property and a weakened
+counterexample.
+
+R0 completion is a local implementation claim only. The replay transition does
+not authenticate the buyer or provide current, durable, atomic,
+rollback-resistant, concurrent, or externally consumed state. The formal model
+is handwritten and does not prove Rust-source correspondence. No R0 artifact
+authorizes inference execution, networking, persistence, custody, chain action,
+funds, or production use.
 
 ## R1: private execution alpha
 
 Future state slices: provider agent, OpenAI-compatible gateway, streaming,
 cancellation, passive health, direct-provider mode, durable persistence, and
 production IAM. No chain dependency.
+
+The next MVP tranche is authenticated buyer admission, durable atomic replay,
+two provider agents, request deadlines, streaming and cancellation, health and
+failover, signed execution and metering receipts, tenant isolation, receipt
+reconciliation, fault injection, and a synthetic no-funds soak.
 
 ## R2: HyperEVM testnet
 

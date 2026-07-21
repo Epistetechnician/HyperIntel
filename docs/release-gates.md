@@ -3,7 +3,8 @@
 ## Evidence vocabulary
 
 - **Implemented:** source exists in the named state slice.
-- **Locally checked:** declared hermetic checks passed at the recorded commit.
+- **Locally checked:** declared offline checks and their exact prerequisites
+  passed at the recorded commit.
 - **Independently reproduced:** a separate operator replayed the exact bundle.
 - **Testnet exercised:** configured contracts and services produced retained
   testnet artifacts.
@@ -17,7 +18,7 @@ No lower state implies a higher one.
 
 | Release | Required technical evidence | Required operating evidence | Prohibited claim |
 |---|---|---|---|
-| R0 local kernel | Full local gate, tamper fixtures, deterministic reconstruction | Source provenance and claim boundary | Network, funds, provider, chain, or production readiness |
+| R0 local kernel | Full local gate, tamper fixtures, deterministic reconstruction, direct CLI-process fixture, source-bound abstract property | Source provenance and claim boundary | Network, funds, durable replay, provider, chain, or production readiness |
 | R1 private alpha | End-to-end transport tests, durable replay, cancellation, tenant isolation | Two authorized providers, incident runbook, synthetic/no-funds soak | Confidential computing or external settlement |
 | R2 testnet | Contract invariants, deployment provenance, indexer reconstruction, escape tests | Key ceremonies, RPC failover, testnet accounting reconciliation | Mainnet safety or custody authorization |
 | R3 paid beta | External security review, bounded production telemetry, rollback | Legal approval, exposure caps, reserve policy, support and incident drills | General availability or insured SLA |
@@ -45,15 +46,52 @@ No lower state implies a higher one.
   equality. Invalid artifacts are candidate-scoped hard failures.
 - Distinct verifier-authenticated reliability artifacts at one signer, key,
   and logical sequence block the batch; exact artifact reuse is allowed.
-- Route identity commits to the buyer-supplied replay snapshot and selected
-  reliability-artifact-qualified offer. R0 does not enforce consumed nonces or
-  establish that committed reliability observations are true or predict future
-  delivery.
+- V4 reconstructs one canonically ordered, self-digested eligibility report per
+  candidate, retaining complete typed rejections for selected and all-rejected
+  evaluations. Selected evaluations require metering and settlement records;
+  all-rejected evaluations prohibit both.
+- Offer-aware validation rejects a self-digested but suboptimal selected route,
+  and typed failures distinguish invalid assurance evidence, valid evidence
+  rejected by assurance policy, and invalid offer authentication.
+- Route-evaluation identity commits to the buyer-supplied replay snapshot and
+  either the selected reliability-artifact-qualified offer or the deterministic
+  all-rejected result.
+- The V4 replay transition checks the exact buyer, snapshot, next nonce,
+  evaluation digest, validity window, and deterministic successor state. It
+  advances caller-supplied pure data only and grants no buyer authentication,
+  durable or atomic state enforcement, currentness, concurrency control,
+  rollback resistance, or external nonce consumption.
 - Evidence signatures, content bytes, validity, and policy are verified offline
   against trust keys supplied separately from the bundle.
 - Route, metering, settlement, and evidence tampering fails.
+- The compiled CLI process verifies committed V1–V4 fixtures with separate
+  caller trust and rejects missing trust, unknown schemas, invalid argument
+  counts, and missing files. Constructor-bound byte comparisons fail on fixture
+  drift.
+- The local Z3 4.15.0 gate binds the SHA-256 digest of `routing.rs`, returns
+  `unsat` when asked whether its two-candidate abstract selector can select an
+  ineligible offer, and returns `sat` for a deliberately weakened selector.
+  This is a handwritten abstraction, not Rust-source correspondence or runtime
+  authority.
+- Reliability verification does not establish that committed source
+  observations are true or predictive of future delivery.
 - No source imports an HTTP, wallet, EVM, database, or secret-handling runtime.
 - `pnpm run verify:full` passes on the pinned toolchain.
+
+## R0 status
+
+The documented R0 implementation scope is complete in the local lineage through
+`9703256`: schemas, canonicalization, deterministic route
+simulation and reconstruction, V1–V4 offline verification, direct process
+coverage, and one bounded formal property are present. This status means only
+**Implemented** and, when the full gate is rerun at the exact working-tree
+commit, **Locally checked**. It does not imply independent reproduction, R1
+private-alpha readiness, production authorization, or any external effect.
+
+R1 begins at authenticated buyer and provider edges, durable atomic replay
+state, OpenAI-compatible streaming and cancellation through two provider
+agents, receipt reconciliation, tenant isolation, fault injection, and a
+synthetic no-funds soak.
 
 ## Change control
 

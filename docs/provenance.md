@@ -50,6 +50,12 @@ Generalized foundations:
   capital, settlement, recovery, or payoff type was copied.
 - `crates/hsai-gateway-digest-checker/**` -> implementation-diverse checking as
   a future verification pattern.
+- formal-workbench source-binding practice -> the local Z3 contract test pins
+  the exact `routing.rs` digest, solver version, and expected verdict sequence.
+  Only the process and claim-discipline pattern was reused. The
+  `policy_non_widening_v1.smt2` model and all routing semantics are new,
+  inference-native HyperIntel work; no benchmark-OS domain or formal-model code
+  was copied.
 
 Explicitly excluded:
 
@@ -58,6 +64,27 @@ Explicitly excluded:
   provider integrations, and all uncommitted admission/P01B work;
 - any claim that local replay constitutes accepted evidence or production
   authority.
+
+## Local R0 extension lineage
+
+- `4f8b640` adds the inference-native V4 full route-evaluation record,
+  selected-or-all-rejected evidence reconstruction, pure-data buyer
+  replay-state transition, and direct compiled-CLI fixtures. It preserves the
+  V1, V2, and V3 schemas and their existing reconstruction behavior.
+- `661cdc3` adds the local two-candidate policy-non-widening SMT model and its
+  source-bound process test.
+- `9703256` adds strict offer-aware winner validation, distinct assurance
+  evidence/policy/signature rejection records, direct V1–V4 process fixtures,
+  and the repository-controlled exact-version Z3 resolver. The formal test now
+  binds `routing.rs` SHA-256
+  `814c8d8bd5ee42b0ba1d7c97533f475aac8d8c84bab611163115af02efc6acbe`
+  and the expected `unsat` then `sat` verdicts. The resolver accepts only the
+  reported version `Z3 version 4.15.0 - 64 bit`; it does not prove solver-binary
+  provenance.
+
+These local extensions create no provenance claim over runtime observations,
+provider operations, buyer authentication, durable state, independent formal
+correspondence, external settlement, or production authority.
 
 ## Licensing boundary
 

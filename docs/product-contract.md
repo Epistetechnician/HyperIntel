@@ -37,8 +37,37 @@ invalid wrapper cannot deny routing to unaffected valid providers.
 ## Router contract
 
 The router first applies hard gates, then minimizes expected successful cost.
-It emits the full eligible-offer-set commitment, typed rejections, scoring
-version, selected offer, and maximum authorized cost.
+`RouteEvaluationRecordV1` emits one canonically ordered, self-digested
+eligibility report per candidate, including typed rejection reasons and cost
+when available. It records either a selected `RouteDecisionV1` or a
+deterministic `NoEligibleOffer` outcome. A selected decision binds the complete
+candidate-report digest set, scoring version, selected offer, and maximum
+authorized cost. Offer-aware validation independently rejects a self-digested
+selection that is not the deterministic minimum of the disclosed eligible
+candidates. Rejection records distinguish invalid assurance evidence, verified
+evidence that fails assurance policy, and invalid offer authentication instead
+of treating those causes as interchangeable.
+
+V4 binds the evaluation to a deterministic `ReplayStateTransitionV1`. The
+transition accepts only the exact buyer, replay snapshot, and next nonce and
+advances a full before-state to its successor. It is pure data: no buyer
+signature, current-state lookup, database transaction, compare-and-swap,
+rollback protection, or external nonce consumption is implemented.
+
+Every V4 bundle must carry these exact required nonclaim identifiers:
+
+```text
+no-inference-execution
+no-buyer-policy-authentication-or-durable-atomic-replay-state-enforcement
+no-observation-source-verification-or-future-reliability-accuracy
+no-provider-authentication-beyond-supplied-evidence
+no-model-or-output-correctness
+no-confidential-execution-claim
+no-settlement-or-value-movement
+no-hyperevm-contract-claim
+no-independent-reproduction
+no-production-readiness
+```
 
 ## Settlement contract
 
@@ -52,5 +81,9 @@ authorized_max = provider_payout + platform_fee + buyer_refund
 Buyer debit, provider/buyer co-signed receipts, bond remedies, and SLA credits
 are future settlement-adapter behavior. When added, credits must be explicit
 signed fields with their own conservation and collateral checks.
+
+In V4, selected evaluations require both the reconstructed metering receipt and
+settlement intent. All-rejected evaluations require both fields to be absent.
+Neither branch grants execution or settlement authority.
 
 No external effect is authorized in the current repository.

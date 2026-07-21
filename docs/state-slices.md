@@ -32,12 +32,13 @@ identity, caller-trusted verifier signatures, binding, validity, and exact-ratio
 verification through an additive V3 market-evidence profile, offline verification,
 portable full eligibility and rejection reports, pure-data buyer replay-state
 transitions, selected-or-denied reconstruction through an additive V4
-market-evidence profile, direct CLI-process verification, and a hermetic local
-demonstration. Reliability-artifact and replay-transition verification grant no
-authority and make no claim about observation authenticity, representative
-sampling, calibration, stationarity, future provider performance, durable state,
-state currentness, atomic compare-and-swap, rollback resistance, buyer
-authentication, external nonce consumption, or concurrent request serialization.
+market-evidence profile, direct CLI-process verification, and an offline
+environment-pinned local formal demonstration. Reliability-artifact and
+replay-transition verification grant no authority and make no claim about
+observation authenticity, representative sampling, calibration, stationarity,
+future provider performance, durable state, state currentness, atomic
+compare-and-swap, rollback resistance, buyer authentication, external nonce
+consumption, or concurrent request serialization.
 
 ## Reserved future slices
 

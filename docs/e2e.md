@@ -3,7 +3,10 @@
 ## Implementation ledger
 
 This document is the end-to-end target architecture, not a completion claim.
-The current repository remains a local, hermetic, pure-data R0 foundation.
+The current repository completes the documented local, pure-data R0
+implementation target. Its protocol fixtures are hermetic; its separate formal
+process gate is environment-pinned to Z3 4.15.0. It has no R1 runtime or
+external authority.
 
 Implemented now:
 
@@ -15,14 +18,24 @@ Implemented now:
   observation and validity windows, source and methodology commitments, and
   exact floor-PPM count arithmetic in the additive V3 reliability path;
 - deterministic expected-successful-cost routing, conservation, idempotency,
-  V1/V2/V3 reconstruction, and offline verification.
+  V1/V2/V3 reconstruction, and offline verification;
+- additive V4 reconstruction with one full typed eligibility report per
+  candidate, selected-or-all-rejected outcomes, and optional fill artifacts
+  whose presence must match the outcome;
+- a deterministic replay transition over the exact caller-supplied buyer state
+  for both selected and denied evaluations;
+- committed V1–V4 fixtures exercised through the compiled CLI process,
+  including caller-trust and fail-closed boundary cases; and
+- a source-hash-bound Z3 4.15.0 two-candidate policy-non-widening check whose
+  primary query is `unsat` and weakened-selector replay is `sat`.
 
 Still absent: verification of the underlying reliability source observations,
-consumed replay state, signed execution/metering/settlement receipts, provider
-or gateway runtime, network transport, persistence, contracts, custody, funds,
-external settlement, independent reproduction, and production authority. V1
-and V2 are retained for compatibility and keep their narrower explicit
-nonclaims.
+buyer-policy authentication, current or durably consumed replay state, atomic
+compare-and-swap, rollback and concurrent-writer protection, signed
+execution/metering/settlement receipts, provider or gateway runtime, network
+transport, persistence, contracts, custody, funds, external settlement,
+independent reproduction, and production authority. V1, V2, and V3 are retained
+for compatibility and keep their narrower explicit nonclaims.
 
 Repository mutation authority comes only from [`docs/state-slices.md`](state-slices.md).
 The product-object names below do not authorize implementation or external
@@ -273,16 +286,26 @@ Assurance is not converted into a compensating scalar. The buyer specifies minim
 Each `RouteDecisionV1` binds:
 
 - Buyer-policy digest.
-- Request commitment.
-- Eligible-offer-set digest.
-- Rejected offers and typed rejection reasons.
-- Scoring inputs and algorithm version.
-- Selected offer.
-- Maximum authorized cost.
-- Failover order.
-- Route timestamp and expiry.
+- Service-specification and buyer replay-snapshot digests.
+- Canonically ordered candidate records and their eligibility-report digests.
+- Selected provider, provider-identity, and offer digests.
+- Exact selected cost decomposition, including maximum buyer debit.
+- Routing algorithm and explicit evaluation time.
+- An always-false authority field and a self-digest.
 
-This makes routing independently replayable without publishing prompt content.
+`RouteEvaluationRecordV1` retains the complete corresponding
+`EligibilityReportV1` bodies, including typed failures and available cost, for
+every candidate. It binds either the selected decision or a deterministic
+`NoEligibleOffer` outcome. V4 reconstructs that full record from signed offers,
+assurance evidence, reliability artifacts, and caller-controlled trust.
+
+`ReplayStateTransitionV1` then binds the evaluation digest to the buyer's exact
+policy, replay snapshot, next nonce, validity window, and deterministic
+successor state. Selected and all-rejected evaluations both advance the supplied
+cursor. This makes the local artifact independently reconstructable without
+publishing prompt content. It does not authenticate the buyer, read or write a
+database, prove the supplied cursor is current, perform atomic consumption, or
+prevent rollback and concurrent reuse outside the artifact.
 
 ## 9. Provider lifecycle
 
@@ -476,7 +499,22 @@ Verdicts remain:
 - `inconclusive`
 - `unsupported`
 
-A handwritten Lean model retains an explicit source-correspondence assumption. Unsupported Rust, networking, concurrency, serialization, Solidity, or EVM behavior never inherits a proof.
+R0 implements one bounded property in
+[`formal-verification.md`](formal-verification.md). Its QF_LIA model abstracts
+the canonical route order to two candidates with Boolean eligibility and
+cost-presence flags plus a nonnegative total-order rank. Z3 4.15.0 returns
+`unsat` for the claim that the implemented abstraction can select an ineligible
+candidate. It then returns `sat` for a fixed replay in which a deliberately
+weakened selector ignores eligibility and selects the cheaper ineligible
+candidate.
+
+The contract test pins the SHA-256 digest
+`814c8d8bd5ee42b0ba1d7c97533f475aac8d8c84bab611163115af02efc6acbe`
+for `crates/hyperintel-market/src/routing.rs`, the exact Z3 version string, and
+the expected `unsat`/`sat` output. Source drift fails the test, but the SMT
+model remains handwritten. It does not establish semantic correspondence to
+Rust, serialization, networking, concurrency, Solidity, EVM behavior, or any
+external state.
 
 The current benchmark-OS checkout already supplies local claim envelopes, admission, digest checking, cost routing, audit bundles, attestation seams, and Statebook completeness patterns. It remains `Level1LocalReplayOrLower`; source-correspondent accepted evidence and runtime authority are not established. [Current repository ceiling](/Users/shaanp/Documents/GitHub/composed-zk-benchmark-os/README.md:22), [formal residual ceiling](/Users/shaanp/Documents/GitHub/composed-zk-benchmark-os/docs/615-phase-hsai-tiny-z3-post-campaign-residual-ceiling-report.md:112), [formal architecture boundary](/Users/shaanp/Documents/GitHub/composed-zk-benchmark-os/docs/265-hsai-formal-verification-evidence-architecture-boundary.md:74).
 
@@ -621,13 +659,27 @@ Avoid competing first for casual consumer prompts. The buyer must value reliabil
 
 | Release                      | Named state slices                                                      | Deliverable                                                                 | Hard gate                                                                                |
 | ---------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| R0 — Contracts and workbench | Service registry, buyer policy, signed offers, route decision, evidence bundle | Offline schemas, canonicalization, simulator, verifier, one formal property | Deterministic fixtures; unsupported inputs fail closed; no value movement                |
+| R0 — Contracts and workbench (local implementation complete) | Service registry, buyer policy, signed offers, full route evaluation, pure replay transition, evidence bundle | Offline schemas, canonicalization, deterministic fixture simulation, V1–V4 verifier, one bounded formal property | Direct process fixture; unsupported inputs fail closed; no durable state or value movement |
 | R1 — Private execution alpha | Execution session, receipts, provider identity                          | OpenAI-compatible streaming through two provider agents                     | Route replay; receipt reconciliation; fault-injection; no seller credentials held        |
 | R2 — HyperEVM testnet        | Escrow, payment channel, bond, settlement intent, disputes              | Actual-cost testnet settlement and refund                                   | Contract invariants; zero duplicate settlement; token allowlist; role and upgrade review |
 | R3 — Capped mainnet beta     | Receipt commitment, production operations                               | Limited paid market with capped balances and providers                      | External audits; four-week soak; incident drills; legal approval; escape path            |
 | R4 — Reserved-capacity GA    | Capacity reservations, enterprise tenancy                               | Availability windows, enterprise policy gateway, on-prem verifier           | Tenant isolation; reservation stress tests; repeated customer proof-to-enforcement runs  |
 | R5 — Reference index         | Index publication                                                       | Public non-tradable executed-price index                                    | Diversity, concentration, staleness, manipulation, and reproduction gates                |
 | R6 — Optional HIP-3 hedge    | HIP-3 hedge                                                             | Testnet then separately approved mainnet perpetual                          | 500,000 HYPE approval; oracle operations; legal review; market makers; basis-risk limits |
+
+The R0 implementation checklist is complete in the local lineage through
+`9703256`. “Complete” is scoped to implemented local code and,
+when the exact full gate passes, locally checked evidence. It does not mean
+independently reproduced, private-alpha ready, production authorized, or able
+to execute inference or move value. The V4 replay transition consumes no
+external state, and the formal result proves only the stated handwritten
+two-candidate abstraction.
+
+R1 is the next MVP tranche: authenticated buyer admission, durable atomic
+replay, an OpenAI-compatible gateway, two provider agents, deadlines,
+streaming, cancellation, health and failover, signed execution and metering
+receipts, tenant isolation, receipt reconciliation, fault injection, and a
+synthetic no-funds soak.
 
 ## 19. First 12 weeks
 
