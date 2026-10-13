@@ -1,4 +1,4 @@
-//! End-to-end contracts for the provider-agent preflight wrapper.
+// End-to-end contracts for the provider-agent preflight wrapper.
 
 use std::{cell::Cell, collections::BTreeMap};
 
@@ -27,15 +27,15 @@ use hyperintel_persistence::{InitializeReplayStateOutcomeV1, SqliteReplayStoreV1
 use hyperintel_provider_agent::{
     ED25519_ALGORITHM_V1, PROVIDER_AGENT_KEY_SCHEMA_V1, PROVIDER_AGENT_READINESS_CLAIMS_SCHEMA_V1,
     PROVIDER_AGENT_REVOCATION_SNAPSHOT_SCHEMA_V1, PROVIDER_AGENT_SERVICE_MANIFEST_CLAIMS_SCHEMA_V1,
-    ProviderAgentBindingV1, ProviderAgentExecutionContextV1, ProviderAgentKeyPurposeV1,
-    ProviderAgentKeyRegistryV1, ProviderAgentReadinessClaimsV1, ProviderAgentReadinessStatusV1,
-    ProviderAgentRevocationCheckpointV1, ProviderAgentRevocationSnapshotV1,
-    ProviderAgentServiceManifestClaimsV1, ProviderTextStreamInterfaceV1,
-    RegisteredProviderAgentKeyV1, SIGNED_PROVIDER_AGENT_READINESS_SCHEMA_V1,
-    SIGNED_PROVIDER_AGENT_REVOCATION_SNAPSHOT_SCHEMA_V1,
+    ProviderAgentBindingV1, ProviderAgentError, ProviderAgentExecutionContextV1,
+    ProviderAgentKeyPurposeV1, ProviderAgentKeyRegistryV1, ProviderAgentReadinessClaimsV1,
+    ProviderAgentReadinessStatusV1, ProviderAgentRevocationCheckpointV1,
+    ProviderAgentRevocationSnapshotV1, ProviderAgentServiceManifestClaimsV1,
+    ProviderTextStreamInterfaceV1, RegisteredProviderAgentKeyV1,
+    SIGNED_PROVIDER_AGENT_READINESS_SCHEMA_V1, SIGNED_PROVIDER_AGENT_REVOCATION_SNAPSHOT_SCHEMA_V1,
     SIGNED_PROVIDER_AGENT_SERVICE_MANIFEST_SCHEMA_V1, SignedProviderAgentReadinessV1,
     SignedProviderAgentRevocationSnapshotV1, SignedProviderAgentServiceManifestV1,
-    execute_provider_agent_v1,
+    execute_provider_agent_v1, execute_provider_agent_with_activation_v1,
 };
 use serde::Deserialize;
 
@@ -100,6 +100,16 @@ struct TestReceiptSigner {
     key_id: ProtocolId,
     key: SigningKey,
     calls: Cell<u64>,
+}
+
+#[derive(Clone, Copy)]
+enum PreflightDenial {
+    Control,
+    Admission,
+    Replay,
+    Request,
+    ProviderPort,
+    SignerPort,
 }
 
 impl ProviderReceiptSignerV1 for TestReceiptSigner {
@@ -374,6 +384,178 @@ async fn contract_evaluation_time_must_equal_consumption_time_before_replay_or_p
     assert_eq!(provider.calls, 1);
     assert_eq!(signer.calls.get(), 1);
     assert_eq!(store.consumption_count().await?, 1);
+    Ok(())
+}
+
+#[tokio::test]
+async fn contract_activation_runs_once_only_after_full_preflight() -> TestResult {
+    let (fixture, registry, buyer_key) = execution_environment()?;
+    let request = request(&fixture);
+    let case = execution_case(&fixture, &registry, &buyer_key, &request)?;
+    let authenticated = authenticated_context(&fixture, &case, &registry);
+    let store = initialized_store(&fixture).await?;
+    let control = control_fixture(&fixture, &case)?;
+    let mut provider = successful_provider(&fixture)?;
+    let signer = receipt_signer()?;
+    let activation_calls = Cell::new(0_u64);
+    let cancelled = CancellationSignalV1 {
+        requested_at: Some(case.admission.admitted_at.clone()),
+    };
+
+    let denied = execute_provider_agent_with_activation_v1(
+        provider_context(
+            &store,
+            &case,
+            &authenticated,
+            &registry,
+            &request,
+            &cancelled,
+            &control,
+        ),
+        &mut provider,
+        &signer,
+        |_| {
+            activation_calls.set(activation_calls.get() + 1);
+            Ok(())
+        },
+    )
+    .await;
+    assert!(denied.is_err());
+    assert_eq!(activation_calls.get(), 0);
+    assert_eq!(provider.calls, 0);
+    assert_eq!(signer.calls.get(), 0);
+    assert_eq!(store.consumption_count().await?, 0);
+
+    let active = CancellationSignalV1::default();
+    let completed = execute_provider_agent_with_activation_v1(
+        provider_context(
+            &store,
+            &case,
+            &authenticated,
+            &registry,
+            &request,
+            &active,
+            &control,
+        ),
+        &mut provider,
+        &signer,
+        |_| {
+            activation_calls.set(activation_calls.get() + 1);
+            Ok(())
+        },
+    )
+    .await?;
+    assert!(matches!(
+        completed.outcome(),
+        LocalExecutionOutcomeV1::Completed(_)
+    ));
+    assert_eq!(activation_calls.get(), 1);
+    assert_eq!(provider.calls, 1);
+    assert_eq!(signer.calls.get(), 1);
+    assert_eq!(store.consumption_count().await?, 1);
+    Ok(())
+}
+
+#[tokio::test]
+async fn contract_every_invalid_preflight_class_denies_before_activation_or_effects() -> TestResult
+{
+    for denial in [
+        PreflightDenial::Control,
+        PreflightDenial::Admission,
+        PreflightDenial::Replay,
+        PreflightDenial::Request,
+        PreflightDenial::ProviderPort,
+        PreflightDenial::SignerPort,
+    ] {
+        assert_preflight_denial(denial).await?;
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn contract_activation_denial_never_enters_replay_harness_or_ports() -> TestResult {
+    let (fixture, registry, buyer_key) = execution_environment()?;
+    let request = request(&fixture);
+    let case = execution_case(&fixture, &registry, &buyer_key, &request)?;
+    let authenticated = authenticated_context(&fixture, &case, &registry);
+    let store = initialized_store(&fixture).await?;
+    let control = control_fixture(&fixture, &case)?;
+    let cancellation = CancellationSignalV1::default();
+    let mut provider = successful_provider(&fixture)?;
+    let signer = receipt_signer()?;
+    let activation_calls = Cell::new(0_u64);
+
+    let denied = execute_provider_agent_with_activation_v1(
+        provider_context(
+            &store,
+            &case,
+            &authenticated,
+            &registry,
+            &request,
+            &cancellation,
+            &control,
+        ),
+        &mut provider,
+        &signer,
+        |_| {
+            activation_calls.set(activation_calls.get() + 1);
+            Err(ProviderAgentError::ActivationDenied)
+        },
+    )
+    .await;
+    assert!(matches!(denied, Err(ProviderAgentError::ActivationDenied)));
+    assert_eq!(activation_calls.get(), 1);
+    assert_eq!(provider.calls, 0);
+    assert_eq!(signer.calls.get(), 0);
+    assert_eq!(store.consumption_count().await?, 0);
+    Ok(())
+}
+
+async fn assert_preflight_denial(denial: PreflightDenial) -> TestResult {
+    let (fixture, registry, buyer_key) = execution_environment()?;
+    let mut request = request(&fixture);
+    let mut case = execution_case(&fixture, &registry, &buyer_key, &request)?;
+    let mut control = control_fixture(&fixture, &case)?;
+    let mut provider = successful_provider(&fixture)?;
+    let mut signer = receipt_signer()?;
+    match denial {
+        PreflightDenial::Control => {
+            control.evaluated_at = timestamp("2026-07-20T11:59:59Z")?;
+        }
+        PreflightDenial::Admission => case.admission.buyer_id = "buyer:other".parse()?,
+        PreflightDenial::Replay => case.replay_transition.after_state.next_nonce += 1,
+        PreflightDenial::Request => request.messages.clear(),
+        PreflightDenial::ProviderPort => provider.provider_id = "provider:other".parse()?,
+        PreflightDenial::SignerPort => signer.provider_id = "provider:other".parse()?,
+    }
+    let authenticated = authenticated_context(&fixture, &case, &registry);
+    let store = initialized_store(&fixture).await?;
+    let cancellation = CancellationSignalV1::default();
+    let activation_calls = Cell::new(0_u64);
+
+    let denied = execute_provider_agent_with_activation_v1(
+        provider_context(
+            &store,
+            &case,
+            &authenticated,
+            &registry,
+            &request,
+            &cancellation,
+            &control,
+        ),
+        &mut provider,
+        &signer,
+        |_| {
+            activation_calls.set(activation_calls.get() + 1);
+            Ok(())
+        },
+    )
+    .await;
+    assert!(denied.is_err());
+    assert_eq!(activation_calls.get(), 0);
+    assert_eq!(provider.calls, 0);
+    assert_eq!(signer.calls.get(), 0);
+    assert_eq!(store.consumption_count().await?, 0);
     Ok(())
 }
 

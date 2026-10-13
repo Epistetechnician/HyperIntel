@@ -1,0 +1,31 @@
+[package]
+name = "hyperintel-runtime-composition"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+hyperintel-assurance = { path = "../hyperintel-assurance" }
+hyperintel-core = { path = "../hyperintel-core" }
+hyperintel-execution = { path = "../hyperintel-execution" }
+hyperintel-execution-journal = { path = "../hyperintel-execution-journal" }
+hyperintel-market = { path = "../hyperintel-market" }
+hyperintel-provider-agent = { path = "../hyperintel-provider-agent" }
+hyperintel-reconciliation = { path = "../hyperintel-reconciliation" }
+hyperintel-runtime-config = { path = "../hyperintel-runtime-config" }
+hyperintel-secret-provider = { path = "../hyperintel-secret-provider" }
+hyperintel-tenant-iam = { path = "../hyperintel-tenant-iam" }
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+data-encoding.workspace = true
+ed25519-dalek.workspace = true
+hyperintel-persistence = { path = "../hyperintel-persistence" }
+serde_json.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

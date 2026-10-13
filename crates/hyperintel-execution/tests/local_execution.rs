@@ -14,6 +14,7 @@ use hyperintel_execution::{
     LocalExecutionOutcomeV1, LocalProviderAgentV1, ProviderAgentErrorV1, ProviderExecutionPlanV1,
     ProviderReceiptSignerErrorV1, ProviderReceiptSignerV1, ProviderStreamFrameV1,
     chat_completion_request_digest_v1, execute_local_chat_completion_v1,
+    preflight_local_chat_completion_v1,
 };
 use hyperintel_market::{
     AuthenticatedExecutionAdmissionV1, AuthenticatedExecutionContextV1, BuyerPolicyStatementV1,
@@ -77,6 +78,49 @@ struct TestReceiptSigner {
     signing_key: SigningKey,
     calls: Cell<u64>,
     unavailable: bool,
+}
+
+#[tokio::test]
+async fn contract_public_preflight_matches_harness_denial_without_consumption()
+-> Result<(), Box<dyn std::error::Error>> {
+    let (fixture, registry, buyer_key) = execution_environment()?;
+    let request = request(&fixture, "provider:alpha");
+    let execution_case =
+        execution_case(&fixture, &registry, &buyer_key, &request, "provider:alpha")?;
+    let authenticated = authenticated_context(
+        &fixture,
+        &execution_case.policy,
+        &execution_case.signed_policy,
+        &execution_case.replay_transition,
+        &registry,
+    );
+    let store = initialized_store(&fixture).await?;
+    let mut provider =
+        scripted_provider("provider:alpha", receipt_plan("provider:alpha", &fixture)?)?;
+    let signer = receipt_signer("provider:alpha", 81)?;
+    let cancellation = CancellationSignalV1 {
+        requested_at: Some(execution_case.admission.admitted_at.clone()),
+    };
+    let context = local_context(
+        &store,
+        &execution_case,
+        &authenticated,
+        &registry,
+        &request,
+        &cancellation,
+    );
+    assert!(matches!(
+        preflight_local_chat_completion_v1(&context, &provider, &signer),
+        Err(LocalExecutionError::CancelledBeforeConsumption)
+    ));
+    assert!(matches!(
+        execute_local_chat_completion_v1(context, &mut provider, &signer).await,
+        Err(LocalExecutionError::CancelledBeforeConsumption)
+    ));
+    assert_eq!(provider.calls, 0);
+    assert_eq!(signer.calls.get(), 0);
+    assert_eq!(store.consumption_count().await?, 0);
+    Ok(())
 }
 
 impl ProviderReceiptSignerV1 for TestReceiptSigner {

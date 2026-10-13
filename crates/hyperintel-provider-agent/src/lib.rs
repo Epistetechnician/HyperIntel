@@ -20,6 +20,7 @@ pub use control::{
 };
 pub use execution::{
     ProviderAgentExecutionContextV1, ProviderAgentExecutionV1, execute_provider_agent_v1,
+    execute_provider_agent_with_activation_v1,
 };
 
 /// Authorized repository state slice.
@@ -80,6 +81,9 @@ pub enum ProviderAgentError {
     /// Local execution inputs did not match the signed control lineage.
     #[error("provider-agent execution binding mismatch")]
     ExecutionBindingMismatch,
+    /// Post-control activation failed before harness entry.
+    #[error("provider-agent activation denied")]
+    ActivationDenied,
     /// Canonical bytes could not be produced.
     #[error("provider-agent canonicalization failed: {0}")]
     Canonicalization(#[from] CanonicalizationError),

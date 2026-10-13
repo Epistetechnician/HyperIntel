@@ -18,6 +18,10 @@ use hyperintel_persistence::{
     AuthenticatedReplayConsumptionV1, DURABLE_REPLAY_STATE_SLICE_V1, ReplayPersistenceError,
     SqliteReplayStoreV1,
 };
+use hyperintel_provider_agent::{
+    ProviderAgentError, ProviderAgentExecutionContextV1, ProviderAgentExecutionV1,
+    execute_provider_agent_with_activation_v1,
+};
 use serde::{Deserialize, Serialize};
 use sqlx::{
     Row, SqlitePool,
@@ -205,6 +209,16 @@ pub struct JournaledLocalExecutionV1 {
     pub execution: LocalExecutionOutcomeV1,
 }
 
+/// Journaled provider-agent execution with its opaque control lineage intact.
+pub struct JournaledProviderAgentExecutionV1 {
+    /// Durable start record.
+    pub start: ExecutionJournalStartV1,
+    /// Durable terminal record.
+    pub terminal: ExecutionJournalTerminalV1,
+    /// Opaque provider-agent result containing the existing harness outcome.
+    pub execution: ProviderAgentExecutionV1,
+}
+
 /// Durable execution journal failures.
 #[derive(Debug, Error)]
 pub enum ExecutionJournalError {
@@ -247,6 +261,10 @@ pub enum ExecutionJournalError {
     /// Local execution failed after its terminal classification was retained.
     #[error("journaled local execution failed: {0}")]
     Execution(#[from] LocalExecutionError),
+    /// Provider-agent control, activation, or execution failed after any
+    /// mechanically attributable terminal was retained.
+    #[error("journaled provider-agent execution failed: {0}")]
+    ProviderAgent(#[from] ProviderAgentError),
 }
 
 /// Separate local `SQLite` metadata journal.
@@ -701,6 +719,143 @@ where
             Err(ExecutionJournalError::Execution(error))
         }
     }
+}
+
+/// Journal one exact provider-agent activation and execution attempt.
+///
+/// Start and recovery inspection occur before the provider-agent wrapper is
+/// invoked. Successful terminal metadata is derived only from its opaque local
+/// outcome and rebound to the actual replay record. Closed failures receive a
+/// terminal only when replay state mechanically attributes it to this attempt.
+/// This function performs no retry or resume.
+///
+/// # Errors
+///
+/// Returns before activation when recovery is not fresh. Returns on journal,
+/// replay, provider-agent control, activation, or execution failure. A
+/// pre-existing or concurrent consumption not mechanically attributable to
+/// this attempt never receives a synthesized terminal.
+pub async fn execute_journaled_provider_agent_with_activation_v1<P, S, A>(
+    journal: &SqliteExecutionJournalV1,
+    context: ProviderAgentExecutionContextV1<'_>,
+    provider: &mut P,
+    signer: &S,
+    activation: A,
+) -> Result<JournaledProviderAgentExecutionV1, ExecutionJournalError>
+where
+    P: LocalProviderAgentV1,
+    S: ProviderReceiptSignerV1,
+    A: FnOnce(&mut P) -> Result<(), ProviderAgentError>,
+{
+    let start = build_execution_journal_start_v1(ExecutionJournalStartDraftV1 {
+        admission_digest: context.local_execution.admission.admission_digest,
+        buyer_id: context.local_execution.admission.buyer_id.clone(),
+        provider_id: context.local_execution.admission.provider_id.clone(),
+        prompt_digest: context.local_execution.admission.prompt_digest,
+        started_at: context.local_execution.consumed_at.clone(),
+    })?;
+    let replay_store = context.local_execution.replay_store;
+    prepare_provider_agent_journal_start(journal, replay_store, &start).await?;
+    match execute_provider_agent_with_activation_v1(context, provider, signer, |provider| {
+        activation(provider).map_err(|_| ProviderAgentError::ActivationDenied)
+    })
+    .await
+    {
+        Ok(execution) => {
+            let (status, claimed_consumption, outcome, finished_at) =
+                outcome_metadata(execution.outcome());
+            let consumption = replay_store.consumption(start.admission_digest).await?;
+            if consumption.as_ref() != Some(claimed_consumption) {
+                return Err(ExecutionJournalError::StoredBindingMismatch);
+            }
+            let terminal = build_execution_journal_terminal_v1(
+                &start,
+                ExecutionJournalTerminalDraftV1 {
+                    consumption_digest: Some(claimed_consumption.consumption_digest),
+                    outcome_digest: Some(outcome),
+                    status,
+                    finished_at,
+                },
+            )?;
+            journal
+                .finish_with_consumption(&terminal, consumption.as_ref())
+                .await?;
+            Ok(JournaledProviderAgentExecutionV1 {
+                start,
+                terminal,
+                execution,
+            })
+        }
+        Err(error) => {
+            let consumption = replay_store.consumption(start.admission_digest).await?;
+            let Some(consumption) = consumption else {
+                let terminal = build_execution_journal_terminal_v1(
+                    &start,
+                    ExecutionJournalTerminalDraftV1 {
+                        consumption_digest: None,
+                        outcome_digest: None,
+                        status: ExecutionJournalTerminalStatusV1::RejectedBeforeConsumption,
+                        finished_at: start.started_at.clone(),
+                    },
+                )?;
+                journal.finish_with_consumption(&terminal, None).await?;
+                return Err(ExecutionJournalError::ProviderAgent(error));
+            };
+            if !is_structurally_post_consumption_provider_agent_error(&error) {
+                return Err(ExecutionJournalError::ConsumedWithoutTerminal);
+            }
+            let terminal = build_execution_journal_terminal_v1(
+                &start,
+                ExecutionJournalTerminalDraftV1 {
+                    consumption_digest: Some(consumption.consumption_digest),
+                    outcome_digest: None,
+                    status: ExecutionJournalTerminalStatusV1::FailedAfterConsumption,
+                    finished_at: consumption.consumed_at.clone(),
+                },
+            )?;
+            journal
+                .finish_with_consumption(&terminal, Some(&consumption))
+                .await?;
+            Err(ExecutionJournalError::ProviderAgent(error))
+        }
+    }
+}
+
+const fn is_structurally_post_consumption_provider_agent_error(error: &ProviderAgentError) -> bool {
+    matches!(
+        error,
+        ProviderAgentError::LocalExecution(
+            LocalExecutionError::InvalidProviderPlan
+                | LocalExecutionError::InvalidUnixTimestamp
+                | LocalExecutionError::ExecutionEvidence(_)
+                | LocalExecutionError::Routing(_)
+                | LocalExecutionError::Settlement(_)
+        )
+    )
+}
+
+async fn prepare_provider_agent_journal_start(
+    journal: &SqliteExecutionJournalV1,
+    replay_store: &SqliteReplayStoreV1,
+    start: &ExecutionJournalStartV1,
+) -> Result<(), ExecutionJournalError> {
+    match journal
+        .recovery_state(start.admission_digest, replay_store)
+        .await?
+    {
+        ExecutionRecoveryStateV1::NotStarted => {}
+        ExecutionRecoveryStateV1::StartedNotConsumed(_) => {
+            return Err(ExecutionJournalError::AlreadyStarted);
+        }
+        ExecutionRecoveryStateV1::Terminal { .. } => {
+            return Err(ExecutionJournalError::AlreadyTerminal);
+        }
+        ExecutionRecoveryStateV1::ConsumedWithoutTerminal { .. }
+        | ExecutionRecoveryStateV1::ConsumedWithoutStart(_) => {
+            return Err(ExecutionJournalError::ConsumedWithoutTerminal);
+        }
+    }
+    prepare_execution_journal_start(journal, replay_store, start).await
 }
 
 async fn prepare_execution_journal_start(

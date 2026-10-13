@@ -3,7 +3,7 @@ use std::fmt;
 use hyperintel_core::{InferenceCapability, ProtocolId, Sha256Digest, UtcTimestamp};
 use hyperintel_execution::{
     LocalExecutionContextV1, LocalExecutionOutcomeV1, LocalProviderAgentV1,
-    ProviderReceiptSignerV1, execute_local_chat_completion_v1,
+    ProviderReceiptSignerV1, execute_local_chat_completion_v1, preflight_local_chat_completion_v1,
 };
 use hyperintel_market::{
     RouteEvaluationOutcomeV1, evaluate_reliability_artifact_verified_route_v1,
@@ -179,6 +179,28 @@ where
     P: LocalProviderAgentV1,
     S: ProviderReceiptSignerV1,
 {
+    execute_provider_agent_with_activation_v1(context, provider, signer, |_| Ok(())).await
+}
+
+/// Verify control and full preflight, activate once, then enter the existing harness once.
+///
+/// No reusable verified-control token is exposed.
+///
+/// # Errors
+///
+/// Returns before activation for any control or harness-preflight denial, on activation denial,
+/// or for an error returned by the existing local harness after activation.
+pub async fn execute_provider_agent_with_activation_v1<P, S, A>(
+    context: ProviderAgentExecutionContextV1<'_>,
+    provider: &mut P,
+    signer: &S,
+    activation: A,
+) -> Result<ProviderAgentExecutionV1, ProviderAgentError>
+where
+    P: LocalProviderAgentV1,
+    S: ProviderReceiptSignerV1,
+    A: FnOnce(&mut P) -> Result<(), ProviderAgentError>,
+{
     if context.evaluated_at != context.local_execution.consumed_at {
         return Err(ProviderAgentError::ControlDenied);
     }
@@ -193,12 +215,15 @@ where
     )?;
     let route_decision_digest =
         preflight_execution_binding(&context.local_execution, context.expected_binding)?;
+    preflight_local_chat_completion_v1(&context.local_execution, provider, signer)?;
     let checkpoint_digest = context.checkpoint.digest()?;
     let admission_digest = context.local_execution.admission.admission_digest;
     let selected_offer_digest = context.local_execution.admission.offer_digest;
     let provider_id = context.expected_binding.provider_id.clone();
     let agent_instance_id = context.expected_binding.agent_instance_id.clone();
     let evaluated_at = context.evaluated_at.clone();
+
+    activation(provider)?;
 
     let outcome =
         execute_local_chat_completion_v1(context.local_execution, provider, signer).await?;

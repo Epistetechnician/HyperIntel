@@ -25,6 +25,24 @@ use thiserror::Error;
 /// State slice persisted by this crate.
 pub const DURABLE_REPLAY_STATE_SLICE_V1: &str = "hyperintel-durable-replay-store-v1";
 
+/// Verify authenticated admission and exact consumption-time bounds without persistence effects.
+///
+/// # Errors
+///
+/// Returns on invalid buyer/admission evidence or a time outside the inclusive admission window.
+pub fn preflight_authenticated_admission_consumption_v1(
+    admission: &AuthenticatedExecutionAdmissionV1,
+    context: &AuthenticatedExecutionContextV1<'_>,
+    registry: &VerificationKeyRegistry,
+    consumed_at: &UtcTimestamp,
+) -> Result<(), ReplayPersistenceError> {
+    verify_authenticated_execution_admission_v1(admission, context, registry)?;
+    if *consumed_at < admission.admitted_at || *consumed_at > admission.deadline_at {
+        return Err(ReplayPersistenceError::InvalidConsumptionTime);
+    }
+    Ok(())
+}
+
 const SQLITE_SCHEMA_V1: &str = r"
 CREATE TABLE buyer_replay_states (
   buyer_id TEXT PRIMARY KEY,
@@ -341,10 +359,12 @@ impl SqliteReplayStoreV1 {
         registry: &VerificationKeyRegistry,
         consumed_at: &UtcTimestamp,
     ) -> Result<ConsumeReplayOutcomeV1, ReplayPersistenceError> {
-        verify_authenticated_execution_admission_v1(admission, context, registry)?;
-        if *consumed_at < admission.admitted_at || *consumed_at > admission.deadline_at {
-            return Err(ReplayPersistenceError::InvalidConsumptionTime);
-        }
+        preflight_authenticated_admission_consumption_v1(
+            admission,
+            context,
+            registry,
+            consumed_at,
+        )?;
         let consumption = build_consumption(admission, context, consumed_at)?;
         let payload_json = serde_json::to_string(&consumption)?;
         let transition = context.replay_transition;

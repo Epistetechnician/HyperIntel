@@ -569,10 +569,14 @@ dependencies = [
 name = "hyperintel-execution-journal"
 version = "0.1.0"
 dependencies = [
+ "data-encoding",
+ "ed25519-dalek",
+ "hyperintel-assurance",
  "hyperintel-core",
  "hyperintel-execution",
  "hyperintel-market",
  "hyperintel-persistence",
+ "hyperintel-provider-agent",
  "serde",
  "serde_json",
  "sqlx",
@@ -643,6 +647,30 @@ dependencies = [
  "hyperintel-persistence",
  "serde",
  "serde_json",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "hyperintel-runtime-composition"
+version = "0.1.0"
+dependencies = [
+ "data-encoding",
+ "ed25519-dalek",
+ "hyperintel-assurance",
+ "hyperintel-core",
+ "hyperintel-execution",
+ "hyperintel-execution-journal",
+ "hyperintel-market",
+ "hyperintel-persistence",
+ "hyperintel-provider-agent",
+ "hyperintel-reconciliation",
+ "hyperintel-runtime-config",
+ "hyperintel-secret-provider",
+ "hyperintel-tenant-iam",
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror",
  "tokio",
 ]

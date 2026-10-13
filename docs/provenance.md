@@ -85,6 +85,35 @@ Explicitly excluded:
 - any claim that local replay constitutes accepted evidence or production
 authority.
 
+Source research scope: `hyperintel-repository-foundation-v1` (documentation
+only).
+
+## Source C: simple-compute-market
+
+- Repository: <https://github.com/arkhai-io/simple-compute-market>
+- Commit: `a1c46d20b1b2f1aabe53e1b052921a87cf9d7360`
+- License at the pinned commit: MIT.
+
+The implementation was not copied. Its documented separation of buyer,
+federated listing registry, seller storefront, resource service, and settlement
+roles informs the proposed integration boundary: discovery, seller negotiation,
+fulfillment, and settlement belong to distinct actors. No source schemas, HTTP
+protocol, negotiation flow, settlement adapter, code, fixtures, or assets were
+copied.
+
+## Source D: the-compute-bazaar
+
+- Repository: <https://github.com/gustofied/the-compute-bazaar>
+- Commit: `d1809e5cfa843c087ebc4de9f00561bf0be67d55`
+- License at the pinned commit: no root `LICENSE` file was present.
+
+No source code, fixture, or asset was copied. Its documented separation of raw
+offer observations, normalized market views, operator fleet records,
+evaluation, and later trading informs the proposed separation of market data
+from provider operations and any future financial product. No medallion lake,
+provider operations, evaluation bench, executed-price index, or tradeable
+product has been implemented from this source.
+
 ## Local R0 extension lineage
 
 - `4f8b640` adds the inference-native V4 full route-evaluation record,

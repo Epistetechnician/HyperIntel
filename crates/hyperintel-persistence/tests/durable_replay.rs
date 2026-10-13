@@ -18,7 +18,7 @@ use hyperintel_market::{
 };
 use hyperintel_persistence::{
     ConsumeReplayOutcomeV1, InitializeReplayStateOutcomeV1, ReplayPersistenceError,
-    SqliteReplayStoreV1,
+    SqliteReplayStoreV1, preflight_authenticated_admission_consumption_v1,
 };
 use serde::Deserialize;
 use tempfile::tempdir;
@@ -46,6 +46,58 @@ struct AdmissionFixture {
     competing_transition: ReplayStateTransitionV1,
     original_admission: AuthenticatedExecutionAdmissionV1,
     competing_admission: AuthenticatedExecutionAdmissionV1,
+}
+
+#[test]
+fn contract_read_only_consumption_preflight_authenticates_and_bounds_time()
+-> Result<(), Box<dyn std::error::Error>> {
+    let inputs = admission_fixture()?;
+    let context = authenticated_context(
+        &inputs.fixture,
+        &inputs.fixture.bundle.policy,
+        &inputs.signed_policy,
+        &inputs.fixture.bundle.replay_transition,
+        &inputs.registry,
+    );
+    assert!(
+        preflight_authenticated_admission_consumption_v1(
+            &inputs.original_admission,
+            &context,
+            &inputs.registry,
+            &inputs.original_admission.admitted_at,
+        )
+        .is_ok()
+    );
+    assert!(matches!(
+        preflight_authenticated_admission_consumption_v1(
+            &inputs.original_admission,
+            &context,
+            &inputs.registry,
+            &timestamp("2026-07-20T11:59:59Z")?,
+        ),
+        Err(ReplayPersistenceError::InvalidConsumptionTime)
+    ));
+    assert!(matches!(
+        preflight_authenticated_admission_consumption_v1(
+            &inputs.original_admission,
+            &context,
+            &inputs.registry,
+            &timestamp("2026-07-20T12:05:01Z")?,
+        ),
+        Err(ReplayPersistenceError::InvalidConsumptionTime)
+    ));
+    let mut tampered = inputs.original_admission.clone();
+    tampered.buyer_id = "buyer:other".parse()?;
+    assert!(
+        preflight_authenticated_admission_consumption_v1(
+            &tampered,
+            &context,
+            &inputs.registry,
+            &tampered.admitted_at,
+        )
+        .is_err()
+    );
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

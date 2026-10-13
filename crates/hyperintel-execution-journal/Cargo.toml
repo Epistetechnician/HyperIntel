@@ -10,12 +10,16 @@ hyperintel-core = { path = "../hyperintel-core" }
 hyperintel-execution = { path = "../hyperintel-execution" }
 hyperintel-market = { path = "../hyperintel-market" }
 hyperintel-persistence = { path = "../hyperintel-persistence" }
+hyperintel-provider-agent = { path = "../hyperintel-provider-agent" }
 serde.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+data-encoding.workspace = true
+ed25519-dalek.workspace = true
+hyperintel-assurance = { path = "../hyperintel-assurance" }
 tempfile.workspace = true
 tokio.workspace = true
 

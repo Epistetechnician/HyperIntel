@@ -22,7 +22,7 @@ use hyperintel_market::{
 };
 use hyperintel_persistence::{
     AuthenticatedReplayConsumptionV1, ConsumeReplayOutcomeV1, ReplayPersistenceError,
-    SqliteReplayStoreV1,
+    SqliteReplayStoreV1, preflight_authenticated_admission_consumption_v1,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -414,7 +414,7 @@ where
     P: LocalProviderAgentV1,
     S: ProviderReceiptSignerV1,
 {
-    preflight(&context, provider, signer)?;
+    preflight_local_chat_completion_v1(&context, provider, signer)?;
     let consumption = consume_once(&context).await?;
     let plan = match provider.execute(context.request, context.admission) {
         Ok(value) => value,
@@ -438,7 +438,14 @@ where
     complete_execution(&context, consumption, plan, signer)
 }
 
-fn preflight<P, S>(
+/// Verify every read-only request, prompt, provider, signer, and cancellation binding.
+///
+/// This canonical preflight performs no replay lookup or mutation and invokes neither port.
+///
+/// # Errors
+///
+/// Returns a closed local-execution failure for any pre-consumption binding denial.
+pub fn preflight_local_chat_completion_v1<P, S>(
     context: &LocalExecutionContextV1<'_>,
     provider: &P,
     signer: &S,
@@ -447,6 +454,12 @@ where
     P: LocalProviderAgentV1,
     S: ProviderReceiptSignerV1,
 {
+    preflight_authenticated_admission_consumption_v1(
+        context.admission,
+        context.authenticated,
+        context.verification_keys,
+        context.consumed_at,
+    )?;
     let request = context.request;
     if !request.stream
         || request.messages.is_empty()
