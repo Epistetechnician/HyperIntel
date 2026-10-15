@@ -5,7 +5,7 @@ source repository's outcome-market or benchmark-specific domain model.
 
 ## Source A: HyperAI
 
-- Repository: `/Users/shaanp/Documents/GitHub/hyperAI`
+- Repository: `<local checkout>/hyperAI`
 - Commit: `dcf41e31aa1f98438a6f8ec6cb253801e26dc0aa`
 - Working tree at migration: clean.
 
@@ -53,7 +53,7 @@ Explicitly excluded:
 
 ## Source B: composed-zk-benchmark-os
 
-- Repository: `/Users/shaanp/Documents/GitHub/composed-zk-benchmark-os`
+- Repository: `<local checkout>/composed-zk-benchmark-os`
 - Commit: `26ac4eed8e9e698d45596167a279c92f19972e62`
 - Working tree at migration: dirty; only committed Git objects were consulted.
 

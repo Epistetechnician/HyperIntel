@@ -1,4 +1,4 @@
-// End-to-end contracts for the provider-agent preflight wrapper.
+//! End-to-end contracts for the provider-agent preflight wrapper.
 
 use std::{cell::Cell, collections::BTreeMap};
 

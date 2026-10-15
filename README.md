@@ -204,3 +204,9 @@ of solver-binary provenance or Rust-source correspondence. See
 - [`docs/claim-boundary.md`](docs/claim-boundary.md)
 - [`docs/formal-verification.md`](docs/formal-verification.md)
 - [`docs/roadmap.md`](docs/roadmap.md)
+
+## Research report and project policy
+
+See [RESEARCH.md](RESEARCH.md) for findings and known open items,
+[SECURITY.md](SECURITY.md) to report issues, and [CONTRIBUTING.md](CONTRIBUTING.md).
+Licensed under [Apache-2.0](LICENSE).

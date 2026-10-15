@@ -37,3 +37,14 @@ independent verification, external settlement, or value movement.
 Normal tests must be hermetic. Network access, provider credentials, wallet
 keys, EVM submission, HyperCore actions, custody, and mainnet mutation require a
 separate explicitly authorized state slice and operator acknowledgement.
+
+## Public release readiness
+
+Explicit public-release readiness is authorized under named state slice
+`public-release-readiness-v1`: additive `LICENSE`, `NOTICE`, `SECURITY.md`,
+`CONTRIBUTING.md`, `RESEARCH.md`, README navigation, replacement of
+machine-specific documentation paths with placeholders, `#[ignore]` markers with
+a disclosed reason on two failing snapshot tests, formatting and lint-only test
+edits, and a CI workflow. It changes no production source, thresholds, or claim
+ceilings and adds no network, wallet, or provider capability. Every mutation in
+this phase names state slice `public-release-readiness-v1`.

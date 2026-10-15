@@ -623,7 +623,7 @@ model remains handwritten. It does not establish semantic correspondence to
 Rust, serialization, networking, concurrency, Solidity, EVM behavior, or any
 external state.
 
-The current benchmark-OS checkout already supplies local claim envelopes, admission, digest checking, cost routing, audit bundles, attestation seams, and Statebook completeness patterns. It remains `Level1LocalReplayOrLower`; source-correspondent accepted evidence and runtime authority are not established. [Current repository ceiling](/Users/shaanp/Documents/GitHub/composed-zk-benchmark-os/README.md:22), [formal residual ceiling](/Users/shaanp/Documents/GitHub/composed-zk-benchmark-os/docs/615-phase-hsai-tiny-z3-post-campaign-residual-ceiling-report.md:112), [formal architecture boundary](/Users/shaanp/Documents/GitHub/composed-zk-benchmark-os/docs/265-hsai-formal-verification-evidence-architecture-boundary.md:74).
+The current benchmark-OS checkout already supplies local claim envelopes, admission, digest checking, cost routing, audit bundles, attestation seams, and Statebook completeness patterns. It remains `Level1LocalReplayOrLower`; source-correspondent accepted evidence and runtime authority are not established. [Current repository ceiling](<local checkout>/composed-zk-benchmark-os/README.md:22), [formal residual ceiling](<local checkout>/composed-zk-benchmark-os/docs/615-phase-hsai-tiny-z3-post-campaign-residual-ceiling-report.md:112), [formal architecture boundary](<local checkout>/composed-zk-benchmark-os/docs/265-hsai-formal-verification-evidence-architecture-boundary.md:74).
 
 Product delivery and formal correspondence therefore advance in parallel:
 
@@ -1102,7 +1102,7 @@ Do not import:
 - `hyperliquid-hip4`.
 - Outcome-specific tables, APIs, and settlement types.
 
-HyperAI’s current code remains a tested hermetic protocol and mock-settlement boundary, not a live marketplace. [HyperAI README](/Users/shaanp/Documents/GitHub/hyperAI/README.md:11), [current limitations](/Users/shaanp/Documents/GitHub/hyperAI/docs/outcomes/limitations.md:16).
+HyperAI’s current code remains a tested hermetic protocol and mock-settlement boundary, not a live marketplace. [HyperAI README](<local checkout>/hyperAI/README.md:11), [current limitations](<local checkout>/hyperAI/docs/outcomes/limitations.md:16).
 
 Reuse from benchmark-OS and HSAI:
 

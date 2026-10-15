@@ -10,16 +10,16 @@ mod contracts {
     };
     use hyperintel_core::{InferenceRequestPolicyV1, ProtocolId, Sha256Digest, UtcTimestamp};
     use hyperintel_execution::{
-        CancellationSignalV1, ChatCompletionMessageV1, ChatCompletionRequestV1,
-        ChatMessageRoleV1, LocalExecutionContextV1, ProviderAgentErrorV1,
-        ProviderExecutionPlanV1, ProviderReceiptSignerErrorV1, ProviderReceiptSignerV1,
-        ProviderStreamFrameV1, chat_completion_request_digest_v1,
+        CancellationSignalV1, ChatCompletionMessageV1, ChatCompletionRequestV1, ChatMessageRoleV1,
+        LocalExecutionContextV1, ProviderAgentErrorV1, ProviderExecutionPlanV1,
+        ProviderReceiptSignerErrorV1, ProviderReceiptSignerV1, ProviderStreamFrameV1,
+        chat_completion_request_digest_v1,
     };
 
     use hyperintel_execution_journal::SqliteExecutionJournalV1;
     use hyperintel_market::{
-        AuthenticatedExecutionAdmissionV1, AuthenticatedExecutionContextV1,
-        BuyerPolicyStatementV1, ProviderExecutionReceiptV1, ProviderExecutionStatementV1,
+        AuthenticatedExecutionAdmissionV1, AuthenticatedExecutionContextV1, BuyerPolicyStatementV1,
+        ProviderExecutionReceiptV1, ProviderExecutionStatementV1,
         ReliabilityArtifactVerifiedRoutingContextV1, ReplayProtectedMarketEvidenceBundleV4,
         ReplayStateTransitionV1, SignedInferenceRequestPolicyV1, SignedReliabilityArtifactV1,
         build_authenticated_execution_admission_v1, derive_replay_state_transition_v1,
@@ -29,8 +29,7 @@ mod contracts {
     use hyperintel_persistence::{InitializeReplayStateOutcomeV1, SqliteReplayStoreV1};
     use hyperintel_provider_agent::{
         ED25519_ALGORITHM_V1, PROVIDER_AGENT_KEY_SCHEMA_V1,
-        PROVIDER_AGENT_READINESS_CLAIMS_SCHEMA_V1,
-        PROVIDER_AGENT_REVOCATION_SNAPSHOT_SCHEMA_V1,
+        PROVIDER_AGENT_READINESS_CLAIMS_SCHEMA_V1, PROVIDER_AGENT_REVOCATION_SNAPSHOT_SCHEMA_V1,
         PROVIDER_AGENT_SERVICE_MANIFEST_CLAIMS_SCHEMA_V1, ProviderAgentBindingV1,
         ProviderAgentExecutionContextV1, ProviderAgentKeyPurposeV1, ProviderAgentKeyRegistryV1,
         ProviderAgentReadinessClaimsV1, ProviderAgentReadinessStatusV1,
