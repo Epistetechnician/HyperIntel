@@ -1,4 +1,138 @@
+<!-- readme-v2:begin -->
 # HyperIntel
+
+[![CI](https://github.com/Epistetechnician/HyperIntel/actions/workflows/ci.yml/badge.svg)](https://github.com/Epistetechnician/HyperIntel/actions/workflows/ci.yml) [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE) ![visibility: private staging](https://img.shields.io/badge/release-private%20staging-lightgrey) ![claims: bounded](https://img.shields.io/badge/claims-bounded%20local-orange)
+
+> HyperIntel is the inference-native foundation for a policy-compliant, SLA-backed, evidence-carrying inference marketplace.
+
+## Contents
+
+- [At a glance](#at-a-glance)
+- [Key findings](#key-findings)
+- [Verification and CI/CD acceptance](#verification-and-cicd-acceptance)
+- [Quick start](#quick-start)
+- [Detailed documentation](#detailed-documentation)
+- [Governance, claims, and non-claims](#governance-claims-and-non-claims)
+- [Security, contributing, license](#security-contributing-license)
+
+## At a glance
+
+| | |
+|---|---|
+| Stack | Rust 1.93.1 (pinned) |
+| Release stage | Private staging for research release; not yet public |
+| License | Apache-2.0 (see [LICENSE](LICENSE), [NOTICE](NOTICE)) |
+| Research report | [RESEARCH.md](RESEARCH.md) |
+| Last full acceptance run | 2026-10-14 |
+| Evidence ceiling | Bounded local replay. Nothing here is independent, benchmark, or production evidence. |
+
+## Key findings
+
+This is a summary of [RESEARCH.md](RESEARCH.md). Every result is a bounded local or synthetic observation, and negative results are retained rather than retuned away.
+
+### Question
+
+Can a policy-compliant, SLA-backed, evidence-carrying inference marketplace be
+built so that routing, admission, execution, metering and settlement intent are
+all deterministic, replayable, and fail closed, before any network, wallet, or
+real-money component exists?
+
+### What was built and tested
+
+A Rust workspace of 13 crates covering: canonical JSON and digests; signed
+capacity offers; typed reliability artifacts with exact count-to-PPM arithmetic;
+eligibility and expected-successful-cost routing with portable full route
+evaluations; authenticated buyer admission; a durable SQLite replay store with
+serialized compare-and-swap and exact-retry idempotency; a text-only streaming
+execution harness with deadlines and cancellation; a metadata-only execution
+journal with crash classification; identity-only reconciliation; strict runtime
+configuration; tenant IAM grants; an operator-secret provider; provider-agent
+manifests and readiness; and an offline CLI verifier for V1-V4 evidence bundles.
+
+Local gate: `115 passed, 0 failed, 2 ignored` across the workspace on the
+pinned Rust 1.93.1 toolchain, plus clean `clippy -D warnings` and `fmt`.
+
+### Findings
+
+1. **A complete route-to-settlement-intent loop can be fully deterministic.**
+   Route, usage, settlement and evidence identities are derived, so any tampering
+   with route, metering, settlement or evidence is rejected offline against a
+   separately supplied trust registry.
+2. **Replay protection needs a durable compare-and-swap, not just a nonce.** The
+   SQLite store registers an exact initial state, advances it atomically, makes
+   exact retries idempotent and rejects a competing writer as stale.
+3. **Crash states must be classified, not resumed.** A consumed admission with no
+   terminal record fails closed and requires a new authenticated nonce or
+   operator reconciliation. The journal and replay store are separate databases,
+   so cross-database atomicity is explicitly not claimed.
+4. **Routing optimises buyer expected successful cost, not platform revenue.**
+   Provider price and platform fee are separate signed fields; hidden spread is
+   prohibited (`docs/economics.md`).
+5. **One property is machine-checked.** With Z3 4.15.0, a two-candidate
+   abstraction of the router cannot select an ineligible offer (`unsat`), and a
+   deliberately weakened selector can (`sat`). The check is bound to the SHA-256
+   of `routing.rs`.
+
+### Known open items
+
+- Two tests in `hyperintel-execution-journal` (`contract_concurrent_exact_wrapper_retry_invokes_provider_agent_once` and `contract_provider_agent_seam_derives_completed_incomplete_and_failed_terminals`) were failing at the release-staging snapshot and are marked `#[ignore]` with that reason. They cover the provider-agent journal wrapper under concurrency and crash recovery, which should be treated as unverified until they pass.
+- Windows and Linux builds are untested; the pinned toolchain and Z3 gate were exercised on macOS only.
+
+### What this does not establish
+
+No HTTP gateway, provider networking, GPU scheduling, wallet signing, EVM
+contracts, mainnet value movement, production authentication, rollback-resistant
+or remotely replicated replay enforcement, or proof of model or output
+correctness. The Z3 result is a handwritten abstraction, not Rust-source
+correspondence. Reliability verification does not show that source observations
+are true or predictive. Nothing here is a security guarantee or independent
+verification.
+
+## Verification and CI/CD acceptance
+
+GitHub Actions workflow `ci.yml` runs on every push and pull request with read-only repository permissions (`contents: read`).
+
+| Job | Runner | Gate |
+|---|---|---|
+| test | ubuntu-latest | `cargo fmt --all -- --check` |
+|  |  | `cargo clippy --workspace --all-targets -- -D warnings` |
+|  |  | `cargo test --workspace -- --skip contract_policy_non_widening` |
+| formal (advisory, `continue-on-error`) | ubuntu-latest | `pip install z3-solver==4.15.0.0` then `cargo test -p hyperintel-market --test formal_policy` |
+
+**Gate intent:** Format, lint, test; Z3 formal-policy job is advisory.
+
+**Local acceptance (2026-10-14):** fmt clean; clippy clean; 114 tests passed, 0 failed, 2 ignored (known open items, tracked in the research report).
+
+Run the same gate locally:
+
+```sh
+tools/pinned-cargo fmt --all -- --check
+tools/pinned-cargo clippy --workspace --all-targets -- -D warnings
+tools/pinned-cargo test --workspace -- --skip contract_policy_non_widening
+```
+
+### Acceptance criteria
+
+- The gate above exits 0 on a clean checkout of the default branch.
+- No claim in this repository exceeds the evidence ceiling stated in [At a glance](#at-a-glance).
+- A failing, skipped, or ignored check is reported as such; it is never reclassified as a pass.
+- Commits to this repository are authored by the maintainer only.
+
+## Quick start
+
+```sh
+git clone https://github.com/Epistetechnician/HyperIntel.git
+cd HyperIntel
+tools/pinned-cargo fmt --all -- --check
+tools/pinned-cargo clippy --workspace --all-targets -- -D warnings
+tools/pinned-cargo test --workspace -- --skip contract_policy_non_widening
+```
+
+## Detailed documentation
+
+The sections below are the repository's original design and implementation documentation, preserved in full.
+
+<!-- readme-v2:detail -->
 
 HyperIntel is the inference-native foundation for a policy-compliant,
 SLA-backed, evidence-carrying inference marketplace.
@@ -210,3 +344,15 @@ of solver-binary provenance or Rust-source correspondence. See
 See [RESEARCH.md](RESEARCH.md) for findings and known open items,
 [SECURITY.md](SECURITY.md) to report issues, and [CONTRIBUTING.md](CONTRIBUTING.md).
 Licensed under [Apache-2.0](LICENSE).
+
+---
+<!-- readme-v2:footer -->
+## Governance, claims, and non-claims
+
+Work proceeds under named state slices recorded in [AGENTS.md](AGENTS.md). The claim ceiling stated above is a hard limit: a local pass is not independent verification, a benchmark result, a proof of the whole system, or a statement about production readiness. See "What this does not establish" in [RESEARCH.md](RESEARCH.md).
+
+## Security, contributing, license
+
+- Report vulnerabilities per [SECURITY.md](SECURITY.md).
+- Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+- Licensed under [Apache-2.0](LICENSE); see [NOTICE](NOTICE).
