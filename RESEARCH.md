@@ -15,7 +15,7 @@ real-money component exists?
 
 ## What was built and tested
 
-A Rust workspace of ten crates covering: canonical JSON and digests; signed
+A Rust workspace of 13 crates covering: canonical JSON and digests; signed
 capacity offers; typed reliability artifacts with exact count-to-PPM arithmetic;
 eligibility and expected-successful-cost routing with portable full route
 evaluations; authenticated buyer admission; a durable SQLite replay store with
