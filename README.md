@@ -1,12 +1,27 @@
 <!-- readme-v2:begin -->
 # HyperIntel
 
-[![CI](https://github.com/Epistetechnician/HyperIntel/actions/workflows/ci.yml/badge.svg)](https://github.com/Epistetechnician/HyperIntel/actions/workflows/ci.yml) [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE) ![visibility: private staging](https://img.shields.io/badge/release-private%20staging-lightgrey) ![claims: bounded](https://img.shields.io/badge/claims-bounded%20local-orange)
+[![CI](https://github.com/Epistetechnician/HyperIntel/actions/workflows/ci.yml/badge.svg)](https://github.com/Epistetechnician/HyperIntel/actions/workflows/ci.yml) [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE) ![claims: bounded](https://img.shields.io/badge/claims-bounded%20local-orange)
 
 > HyperIntel is the inference-native foundation for a policy-compliant, SLA-backed, evidence-carrying inference marketplace.
 
+## Start here
+
+**Question.** Can a policy-compliant, evidence-carrying inference marketplace be built so that routing, admission, execution, metering and settlement intent are deterministic, replayable and fail closed, before any network, wallet or real money exists?
+
+**Headline result.** A 13-crate Rust workspace whose gate passes 115 tests with 0 failures and 2 ignored. Receipts are checkable offline against a separate trust registry, replay protection uses a durable compare-and-swap, and one routing property is machine-checked with Z3 4.15.0 and bound to the SHA-256 of the routing source.
+
+**What it does not show.** No live market, no real settlement, and no confidentiality or no-retention claim: the replay store is a local unencrypted file. The Z3 check covers a two-candidate abstraction of the router, not the whole system.
+
+**Reproduce.**
+
+```sh
+tools/pinned-cargo test --workspace -- --skip contract_policy_non_widening
+```
+
 ## Contents
 
+- [Start here](#start-here)
 - [At a glance](#at-a-glance)
 - [Key findings](#key-findings)
 - [Verification and CI/CD acceptance](#verification-and-cicd-acceptance)
@@ -20,7 +35,7 @@
 | | |
 |---|---|
 | Stack | Rust 1.93.1 (pinned) |
-| Release stage | Private staging for research release; not yet public |
+| Release stage | Public research release |
 | License | Apache-2.0 (see [LICENSE](LICENSE), [NOTICE](NOTICE)) |
 | Research report | [RESEARCH.md](RESEARCH.md) |
 | Last full acceptance run | 2026-10-14 |
