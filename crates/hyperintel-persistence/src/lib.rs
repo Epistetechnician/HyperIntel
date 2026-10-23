@@ -205,8 +205,13 @@ impl SqliteReplayStoreV1 {
         let options = SqliteConnectOptions::from_str("sqlite::memory:")?
             .foreign_keys(true)
             .create_if_missing(true);
+        // An in-memory database lives only as long as its connection, so the
+        // pool must never recycle the single connection.
         let pool = SqlitePoolOptions::new()
             .max_connections(1)
+            .test_before_acquire(false)
+            .idle_timeout(None)
+            .max_lifetime(None)
             .connect_with(options)
             .await?;
         Ok(Self { pool })
