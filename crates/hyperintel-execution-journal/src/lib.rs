@@ -4,7 +4,7 @@
 //! bodies. Journal and replay databases are deliberately separate; no
 //! cross-database atomicity is claimed.
 
-use std::{path::Path, str::FromStr, time::Duration};
+use std::{path::Path, str::FromStr, sync::Arc, time::Duration};
 
 use hyperintel_core::{
     CanonicalizationError, ProtocolId, Sha256Digest, UtcTimestamp, domain_separated_digest,
@@ -24,10 +24,11 @@ use hyperintel_provider_agent::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{
-    Row, SqlitePool,
+    Connection, Row, Sqlite, SqliteConnection, SqlitePool,
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
 };
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 /// State slice emitted by the durable execution journal.
 pub const EXECUTION_JOURNAL_STATE_SLICE_V1: &str = "hyperintel-durable-execution-journal-v1";
@@ -270,24 +271,53 @@ pub enum ExecutionJournalError {
 /// Separate local `SQLite` metadata journal.
 #[derive(Clone, Debug)]
 pub struct SqliteExecutionJournalV1 {
-    pool: SqlitePool,
+    connection: ExecutionJournalConnectionV1,
+}
+
+/// Connection mode of one journal.
+#[derive(Clone, Debug)]
+enum ExecutionJournalConnectionV1 {
+    /// Pool over a file-backed database: a replacement connection observes the
+    /// persisted database, so connection loss is recoverable.
+    Pool(SqlitePool),
+    /// One explicitly owned connection for an in-memory database, serialized
+    /// per operation.
+    ///
+    /// A pool would silently replace a connection lost between runtimes with a
+    /// fresh empty in-memory database; holding the connection gives an exact
+    /// failure instead of a silent empty journal.
+    Single(Arc<Mutex<SqliteConnection>>),
 }
 
 impl SqliteExecutionJournalV1 {
+    async fn connection(
+        &self,
+    ) -> Result<ExecutionJournalConnectionAccessV1<'_>, ExecutionJournalError> {
+        match &self.connection {
+            ExecutionJournalConnectionV1::Pool(pool) => Ok(
+                ExecutionJournalConnectionAccessV1::Pool(pool.acquire().await?),
+            ),
+            ExecutionJournalConnectionV1::Single(single) => Ok(
+                ExecutionJournalConnectionAccessV1::Single(single.lock().await),
+            ),
+        }
+    }
     /// Open a shared one-connection in-memory journal.
+    ///
+    /// All operations serialize on the single owned connection; an exact retry
+    /// sees the same database across runtimes.
     ///
     /// # Errors
     ///
-    /// Returns when `SQLite` cannot initialize the pool.
+    /// Returns when `SQLite` cannot initialize the connection.
     pub async fn in_memory() -> Result<Self, ExecutionJournalError> {
         let options = SqliteConnectOptions::from_str("sqlite::memory:")?
             .foreign_keys(true)
             .create_if_missing(true);
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .connect_with(options)
-            .await?;
-        Ok(Self { pool })
+        let connection = SqliteConnection::connect_with(&options).await?;
+        Ok(Self {
+            connection: ExecutionJournalConnectionV1::Single(Arc::new(Mutex::new(connection))),
+        })
     }
 
     /// Open an operator-selected local journal file.
@@ -312,7 +342,9 @@ impl SqliteExecutionJournalV1 {
             .max_connections(max_connections)
             .connect_with(options)
             .await?;
-        Ok(Self { pool })
+        Ok(Self {
+            connection: ExecutionJournalConnectionV1::Pool(pool),
+        })
     }
 
     /// Apply and checksum the fixed journal schema.
@@ -321,13 +353,15 @@ impl SqliteExecutionJournalV1 {
     ///
     /// Returns on database failure or migration checksum conflict.
     pub async fn migrate(&self) -> Result<(), ExecutionJournalError> {
+        let mut access = self.connection().await?;
+        let connection = access.as_mut();
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS execution_journal_migrations (\
              version INTEGER PRIMARY KEY, checksum TEXT NOT NULL, applied_at TEXT NOT NULL)",
         )
-        .execute(&self.pool)
+        .execute(&mut *connection)
         .await?;
-        let mut transaction = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let mut transaction = connection.begin_with("BEGIN IMMEDIATE").await?;
         let checksum = domain_separated_digest(
             "hyperintel.sqlite-execution-journal-migration.v1",
             &(1_i64, JOURNAL_SCHEMA_V1),
@@ -369,7 +403,9 @@ impl SqliteExecutionJournalV1 {
         start: &ExecutionJournalStartV1,
     ) -> Result<JournalWriteOutcomeV1, ExecutionJournalError> {
         validate_start(start)?;
-        let mut transaction = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let mut access = self.connection().await?;
+        let connection = access.as_mut();
+        let mut transaction = connection.begin_with("BEGIN IMMEDIATE").await?;
         let existing = sqlx::query(
             "SELECT admission_digest, start_digest, buyer_id, provider_id, payload_json, \
              started_at FROM execution_starts WHERE admission_digest = ?",
@@ -431,7 +467,9 @@ impl SqliteExecutionJournalV1 {
         if terminal.consumption_digest != consumption.map(|value| value.consumption_digest) {
             return Err(ExecutionJournalError::StoredBindingMismatch);
         }
-        let mut transaction = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let mut access = self.connection().await?;
+        let connection = access.as_mut();
+        let mut transaction = connection.begin_with("BEGIN IMMEDIATE").await?;
         let start = sqlx::query(
             "SELECT admission_digest, start_digest, buyer_id, provider_id, payload_json, \
              started_at FROM execution_starts WHERE admission_digest = ?",
@@ -489,12 +527,14 @@ impl SqliteExecutionJournalV1 {
         &self,
         admission: Sha256Digest,
     ) -> Result<Option<ExecutionJournalStartV1>, ExecutionJournalError> {
+        let mut access = self.connection().await?;
+        let connection = access.as_mut();
         let row = sqlx::query(
             "SELECT admission_digest, start_digest, buyer_id, provider_id, payload_json, \
              started_at FROM execution_starts WHERE admission_digest = ?",
         )
         .bind(admission.to_hex())
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *connection)
         .await?;
         row.map(|row| decode_start(&row)).transpose()
     }
@@ -508,12 +548,14 @@ impl SqliteExecutionJournalV1 {
         &self,
         admission: Sha256Digest,
     ) -> Result<Option<ExecutionJournalTerminalV1>, ExecutionJournalError> {
+        let mut access = self.connection().await?;
+        let connection = access.as_mut();
         let row = sqlx::query(
             "SELECT admission_digest, terminal_digest, status, payload_json, finished_at \
              FROM execution_terminals WHERE admission_digest = ?",
         )
         .bind(admission.to_hex())
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *connection)
         .await?;
         row.map(|row| decode_terminal(&row)).transpose()
     }
@@ -583,11 +625,37 @@ impl SqliteExecutionJournalV1 {
     ///
     /// Returns when the local WAL checkpoint fails.
     pub async fn checkpoint_and_close(self) -> Result<(), ExecutionJournalError> {
-        sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
-            .execute(&self.pool)
-            .await?;
-        self.pool.close().await;
-        Ok(())
+        match &self.connection {
+            ExecutionJournalConnectionV1::Pool(pool) => {
+                sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+                    .execute(pool)
+                    .await?;
+                pool.close().await;
+                Ok(())
+            }
+            ExecutionJournalConnectionV1::Single(single) => {
+                let mut connection = single.lock().await;
+                sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+                    .execute(&mut *connection)
+                    .await?;
+                Ok(())
+            }
+        }
+    }
+}
+
+/// One borrowed journal connection, bridging pool and owned modes.
+enum ExecutionJournalConnectionAccessV1<'a> {
+    Pool(sqlx::pool::PoolConnection<Sqlite>),
+    Single(tokio::sync::MutexGuard<'a, SqliteConnection>),
+}
+
+impl ExecutionJournalConnectionAccessV1<'_> {
+    fn as_mut(&mut self) -> &mut SqliteConnection {
+        match self {
+            ExecutionJournalConnectionAccessV1::Pool(connection) => connection,
+            ExecutionJournalConnectionAccessV1::Single(connection) => connection,
+        }
     }
 }
 
@@ -725,9 +793,11 @@ where
 ///
 /// Start and recovery inspection occur before the provider-agent wrapper is
 /// invoked. Successful terminal metadata is derived only from its opaque local
-/// outcome and rebound to the actual replay record. Closed failures receive a
-/// terminal only when replay state mechanically attributes it to this attempt.
-/// This function performs no retry or resume.
+/// outcome and rebound to the actual replay record. The wrapper cannot
+/// mechanically attribute an opaque closed harness error to this attempt's own
+/// consumption, so such a consumption retains no synthesized terminal: it stays
+/// non-retriable via `ConsumedWithoutTerminal` and requires a new authenticated
+/// nonce or operator reconciliation. This function performs no retry or resume.
 ///
 /// # Errors
 ///
@@ -788,7 +858,7 @@ where
         }
         Err(error) => {
             let consumption = replay_store.consumption(start.admission_digest).await?;
-            let Some(consumption) = consumption else {
+            if consumption.is_none() {
                 let terminal = build_execution_journal_terminal_v1(
                     &start,
                     ExecutionJournalTerminalDraftV1 {
@@ -800,38 +870,10 @@ where
                 )?;
                 journal.finish_with_consumption(&terminal, None).await?;
                 return Err(ExecutionJournalError::ProviderAgent(error));
-            };
-            if !is_structurally_post_consumption_provider_agent_error(&error) {
-                return Err(ExecutionJournalError::ConsumedWithoutTerminal);
             }
-            let terminal = build_execution_journal_terminal_v1(
-                &start,
-                ExecutionJournalTerminalDraftV1 {
-                    consumption_digest: Some(consumption.consumption_digest),
-                    outcome_digest: None,
-                    status: ExecutionJournalTerminalStatusV1::FailedAfterConsumption,
-                    finished_at: consumption.consumed_at.clone(),
-                },
-            )?;
-            journal
-                .finish_with_consumption(&terminal, Some(&consumption))
-                .await?;
-            Err(ExecutionJournalError::ProviderAgent(error))
+            Err(ExecutionJournalError::ConsumedWithoutTerminal)
         }
     }
-}
-
-const fn is_structurally_post_consumption_provider_agent_error(error: &ProviderAgentError) -> bool {
-    matches!(
-        error,
-        ProviderAgentError::LocalExecution(
-            LocalExecutionError::InvalidProviderPlan
-                | LocalExecutionError::InvalidUnixTimestamp
-                | LocalExecutionError::ExecutionEvidence(_)
-                | LocalExecutionError::Routing(_)
-                | LocalExecutionError::Settlement(_)
-        )
-    )
 }
 
 async fn prepare_provider_agent_journal_start(

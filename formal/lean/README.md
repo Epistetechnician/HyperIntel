@@ -6,6 +6,7 @@ Kernel-checked (Lean 4.30.0, Mathlib v4.30.0) properties of a handwritten abstra
 - `route_min`: the selected candidate has the minimal `rank` among all admissible candidates.
 - `route_none_iff`: the router returns nothing exactly when no candidate is admissible.
 - `route_two_selected_zero` / `route_two_selected_one`: on two candidates the model equals the SMT file's `selected_0` / `selected_1` definitions (tie to index 0 on `<=`, later candidate wins only on strict `<`).
+- `route_snoc_not_adm`: appending a candidate that is not eligible or has no cost to the end of the list leaves the selection unchanged, for any list length.
 
 Axioms used (`#print axioms`): only `propext` and `Quot.sound`. No `sorry`.
 

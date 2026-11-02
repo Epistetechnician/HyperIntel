@@ -19,7 +19,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.93.1
-      - run: pip install z3-solver==4.15.0.0
-      - run: |
-          export HYPERINTEL_Z3="$(python3 -c 'import os,z3;print(os.path.join(os.path.dirname(z3.__file__),"bin","z3"))')"
-          cargo test -p hyperintel-market --test formal_policy
+      - name: Install Z3 4.15.0 executable
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/z3.zip" https://github.com/Z3Prover/z3/releases/download/z3-4.15.0/z3-4.15.0-x64-glibc-2.39.zip
+          echo "6376629b4374fb81f4515b03cff71f5242b42c80c72571ce4ec9d090913a23ae  $RUNNER_TEMP/z3.zip" | sha256sum -c -
+          python3 -m zipfile -e "$RUNNER_TEMP/z3.zip" "$RUNNER_TEMP/z3"
+          chmod +x "$RUNNER_TEMP/z3/z3-4.15.0-x64-glibc-2.39/bin/z3"
+          echo "HYPERINTEL_Z3=$RUNNER_TEMP/z3/z3-4.15.0-x64-glibc-2.39/bin/z3" >> "$GITHUB_ENV"
+      - run: cargo test -p hyperintel-market --test formal_policy
