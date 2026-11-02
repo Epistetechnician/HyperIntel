@@ -166,6 +166,29 @@ theorem route_none_iff (cs : List Cand) :
     route cs = none ↔ ∀ c ∈ cs, adm c = false :=
   go_none_iff cs 0
 
+/-- A non-admissible candidate leaves the scan state unchanged. -/
+theorem step_not_adm (acc : Option (ℕ × Cand)) (x : ℕ × Cand) (h : adm x.2 = false) :
+    step acc x = acc := by
+  unfold step
+  simp [h]
+
+/-- Appending a non-admissible candidate at the end of the list does not change the scan. -/
+theorem go_snoc_not_adm (c : Cand) (hc : adm c = false) :
+    ∀ (cs : List Cand) (i : ℕ) (acc : Option (ℕ × Cand)),
+      go i acc (cs ++ [c]) = go i acc cs
+  | [], i, acc => by
+    have h : step acc (i, c) = acc := step_not_adm acc (i, c) hc
+    simp [go, h]
+  | c' :: cs, i, acc => by
+    simp only [List.cons_append, go]
+    exact go_snoc_not_adm c hc cs (i + 1) (step acc (i, c'))
+
+/-- Policy non-widening: an ineligible or cost-less candidate appended to the offer list
+cannot change the selection. -/
+theorem route_snoc_not_adm (cs : List Cand) (c : Cand) (hc : adm c = false) :
+    route (cs ++ [c]) = route cs :=
+  go_snoc_not_adm c hc cs 0 none
+
 /-- The model on two candidates is exactly the SMT abstraction's `selected_0` / `selected_1`. -/
 theorem route_two_selected_zero (c0 c1 : Cand) :
     route [c0, c1] = some (0, c0) ↔
@@ -186,3 +209,4 @@ end EvidenceLean.Router
 #print axioms EvidenceLean.Router.route_none_iff
 #print axioms EvidenceLean.Router.route_two_selected_zero
 #print axioms EvidenceLean.Router.route_two_selected_one
+#print axioms EvidenceLean.Router.route_snoc_not_adm

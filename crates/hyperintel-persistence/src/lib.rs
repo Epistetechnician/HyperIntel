@@ -4,7 +4,7 @@
 //! `SQLite` file. Successful replay consumption does not release a request,
 //! contact a provider, submit settlement, or grant external authority.
 
-use std::{path::Path, str::FromStr, time::Duration};
+use std::{path::Path, str::FromStr, sync::Arc, time::Duration};
 
 use hyperintel_assurance::VerificationKeyRegistry;
 use hyperintel_core::{
@@ -17,10 +17,11 @@ use hyperintel_market::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{
-    Row, SqlitePool,
+    Connection, Row, Sqlite, SqliteConnection, SqlitePool,
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
 };
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 /// State slice persisted by this crate.
 pub const DURABLE_REPLAY_STATE_SLICE_V1: &str = "hyperintel-durable-replay-store-v1";
@@ -192,29 +193,55 @@ pub enum ReplayPersistenceError {
 /// Local `SQLite` implementation of authenticated replay compare-and-swap.
 #[derive(Clone, Debug)]
 pub struct SqliteReplayStoreV1 {
-    pool: SqlitePool,
+    connection: ReplayPersistenceConnectionV1,
+}
+
+/// Connection mode of one replay store.
+#[derive(Clone, Debug)]
+enum ReplayPersistenceConnectionV1 {
+    /// Pool over a file-backed database: a replacement connection observes the
+    /// persisted database, so connection loss is recoverable.
+    Pool(SqlitePool),
+    /// One explicitly owned connection for an in-memory database, serialized
+    /// per operation.
+    ///
+    /// A pool would silently replace a connection lost between runtimes with a
+    /// fresh empty in-memory database; holding the connection instead surfaces
+    /// an exact failure. The connection dies with the store.
+    Single(Arc<Mutex<SqliteConnection>>),
 }
 
 impl SqliteReplayStoreV1 {
+    async fn connection(
+        &self,
+    ) -> Result<ReplayPersistenceConnectionAccessV1<'_>, ReplayPersistenceError> {
+        match &self.connection {
+            ReplayPersistenceConnectionV1::Pool(pool) => Ok(
+                ReplayPersistenceConnectionAccessV1::Pool(pool.acquire().await?),
+            ),
+            ReplayPersistenceConnectionV1::Single(single) => Ok(
+                ReplayPersistenceConnectionAccessV1::Single(single.lock().await),
+            ),
+        }
+    }
+
     /// Connect to an in-memory test store with one shared connection.
+    ///
+    /// All operations serialize on the single owned connection; sharing the
+    /// store across runtimes observes the same database instead of a silently
+    /// fresh empty one.
     ///
     /// # Errors
     ///
-    /// Returns when `SQLite` cannot initialize the pool.
+    /// Returns when `SQLite` cannot initialize the connection.
     pub async fn in_memory() -> Result<Self, ReplayPersistenceError> {
         let options = SqliteConnectOptions::from_str("sqlite::memory:")?
             .foreign_keys(true)
             .create_if_missing(true);
-        // An in-memory database lives only as long as its connection, so the
-        // pool must never recycle the single connection.
-        let pool = SqlitePoolOptions::new()
-            .max_connections(1)
-            .test_before_acquire(false)
-            .idle_timeout(None)
-            .max_lifetime(None)
-            .connect_with(options)
-            .await?;
-        Ok(Self { pool })
+        let connection = SqliteConnection::connect_with(&options).await?;
+        Ok(Self {
+            connection: ReplayPersistenceConnectionV1::Single(Arc::new(Mutex::new(connection))),
+        })
     }
 
     /// Connect to one operator-selected local `SQLite` path.
@@ -239,7 +266,9 @@ impl SqliteReplayStoreV1 {
             .max_connections(max_connections)
             .connect_with(options)
             .await?;
-        Ok(Self { pool })
+        Ok(Self {
+            connection: ReplayPersistenceConnectionV1::Pool(pool),
+        })
     }
 
     /// Apply and checksum the fixed local replay schema.
@@ -248,14 +277,16 @@ impl SqliteReplayStoreV1 {
     ///
     /// Returns on database failure or migration checksum conflict.
     pub async fn migrate(&self) -> Result<(), ReplayPersistenceError> {
+        let mut access = self.connection().await?;
+        let connection = access.as_mut();
         sqlx::query(
             "CREATE TABLE IF NOT EXISTS hyperintel_schema_migrations (\
              version INTEGER PRIMARY KEY, checksum TEXT NOT NULL, applied_at TEXT NOT NULL)",
         )
-        .execute(&self.pool)
+        .execute(&mut *connection)
         .await?;
 
-        let mut transaction = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let mut transaction = connection.begin_with("BEGIN IMMEDIATE").await?;
         let checksum = migration_checksum(1, SQLITE_SCHEMA_V1)?.to_hex();
         let existing =
             sqlx::query("SELECT checksum FROM hyperintel_schema_migrations WHERE version = 1")
@@ -295,7 +326,9 @@ impl SqliteReplayStoreV1 {
     ) -> Result<InitializeReplayStateOutcomeV1, ReplayPersistenceError> {
         validate_buyer_replay_state_v1(state)?;
         let payload_json = serde_json::to_string(state)?;
-        let mut transaction = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let mut access = self.connection().await?;
+        let connection = access.as_mut();
+        let mut transaction = connection.begin_with("BEGIN IMMEDIATE").await?;
         let existing = sqlx::query(
             "SELECT buyer_id, state_digest, next_nonce, payload_json FROM buyer_replay_states \
              WHERE buyer_id = ?",
@@ -337,12 +370,14 @@ impl SqliteReplayStoreV1 {
         &self,
         buyer_id: &ProtocolId,
     ) -> Result<Option<BuyerReplayStateV1>, ReplayPersistenceError> {
+        let mut access = self.connection().await?;
+        let connection = access.as_mut();
         let row = sqlx::query(
             "SELECT buyer_id, state_digest, next_nonce, payload_json FROM buyer_replay_states \
              WHERE buyer_id = ?",
         )
         .bind(buyer_id.as_str())
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *connection)
         .await?;
         row.map(|value| decode_state_row(&value)).transpose()
     }
@@ -374,7 +409,9 @@ impl SqliteReplayStoreV1 {
         let payload_json = serde_json::to_string(&consumption)?;
         let transition = context.replay_transition;
 
-        let mut transaction = self.pool.begin_with("BEGIN IMMEDIATE").await?;
+        let mut access = self.connection().await?;
+        let connection = access.as_mut();
+        let mut transaction = connection.begin_with("BEGIN IMMEDIATE").await?;
         let existing = sqlx::query(
             "SELECT admission_digest, transition_digest, buyer_id, consumed_nonce, \
              before_state_digest, after_state_digest, payload_json, consumed_at \
@@ -453,13 +490,15 @@ impl SqliteReplayStoreV1 {
         &self,
         admission_digest: Sha256Digest,
     ) -> Result<Option<AuthenticatedReplayConsumptionV1>, ReplayPersistenceError> {
+        let mut access = self.connection().await?;
+        let connection = access.as_mut();
         let row = sqlx::query(
             "SELECT admission_digest, transition_digest, buyer_id, consumed_nonce, \
              before_state_digest, after_state_digest, payload_json, consumed_at \
              FROM authenticated_replay_consumptions WHERE admission_digest = ?",
         )
         .bind(admission_digest.to_hex())
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *connection)
         .await?;
         row.map(|value| decode_consumption_row(&value)).transpose()
     }
@@ -470,9 +509,11 @@ impl SqliteReplayStoreV1 {
     ///
     /// Returns on database failure or an invalid negative count.
     pub async fn consumption_count(&self) -> Result<u64, ReplayPersistenceError> {
+        let mut access = self.connection().await?;
+        let connection = access.as_mut();
         let count: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM authenticated_replay_consumptions")
-                .fetch_one(&self.pool)
+                .fetch_one(&mut *connection)
                 .await?;
         u64::try_from(count).map_err(|_| ReplayPersistenceError::StoredBindingMismatch)
     }
@@ -483,11 +524,37 @@ impl SqliteReplayStoreV1 {
     ///
     /// Returns when the local WAL checkpoint fails.
     pub async fn checkpoint_and_close(self) -> Result<(), ReplayPersistenceError> {
-        sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
-            .execute(&self.pool)
-            .await?;
-        self.pool.close().await;
-        Ok(())
+        match &self.connection {
+            ReplayPersistenceConnectionV1::Pool(pool) => {
+                sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+                    .execute(pool)
+                    .await?;
+                pool.close().await;
+                Ok(())
+            }
+            ReplayPersistenceConnectionV1::Single(single) => {
+                let mut connection = single.lock().await;
+                sqlx::query("PRAGMA wal_checkpoint(TRUNCATE)")
+                    .execute(&mut *connection)
+                    .await?;
+                Ok(())
+            }
+        }
+    }
+}
+
+/// One borrowed replay-store connection, bridging pool and owned modes.
+enum ReplayPersistenceConnectionAccessV1<'a> {
+    Pool(sqlx::pool::PoolConnection<Sqlite>),
+    Single(tokio::sync::MutexGuard<'a, SqliteConnection>),
+}
+
+impl ReplayPersistenceConnectionAccessV1<'_> {
+    fn as_mut(&mut self) -> &mut SqliteConnection {
+        match self {
+            ReplayPersistenceConnectionAccessV1::Pool(connection) => connection,
+            ReplayPersistenceConnectionAccessV1::Single(connection) => connection,
+        }
     }
 }
 

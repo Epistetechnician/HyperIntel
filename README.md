@@ -112,7 +112,7 @@ GitHub Actions workflow `ci.yml` runs on every push and pull request with read-o
 | test | ubuntu-latest | `cargo fmt --all -- --check` |
 |  |  | `cargo clippy --workspace --all-targets -- -D warnings` |
 |  |  | `cargo test --workspace -- --skip contract_policy_non_widening` |
-| formal (advisory, `continue-on-error`) | ubuntu-latest | `pip install z3-solver==4.15.0.0` then `cargo test -p hyperintel-market --test formal_policy` |
+| formal (advisory, `continue-on-error`) | ubuntu-latest | download and SHA-256-verify the Z3 4.15.0 release binary, then `cargo test -p hyperintel-market --test formal_policy` |
 
 **Gate intent:** Format, lint, test; Z3 formal-policy job is advisory.
 
