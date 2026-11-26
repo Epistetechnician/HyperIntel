@@ -5,7 +5,14 @@
 
 mod envelope;
 mod evidence;
+mod pqai;
 mod signature;
+
+pub use pqai::{
+    PQAI_ANCHOR_DOMAIN_V1, PQAI_ANCHOR_SCHEMA_V1, PqaiAnchorError, PqaiAnchorPolicyV1,
+    PqaiAssuranceAnchorV1, PqaiHashFamilyV1, PqaiHashRootPostureV1, VerifiedPqaiAnchorV1,
+    compute_pqai_anchor_commitment_hex, verify_pqai_assurance_anchor_v1,
+};
 
 pub use envelope::{
     AssuranceAcceptancePolicyV1, AssuranceClaimV1, AssuranceEnvelopeV1, AssuranceRejectionV1,
