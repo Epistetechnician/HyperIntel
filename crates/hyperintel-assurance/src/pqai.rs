@@ -41,13 +41,13 @@ pub struct PqaiAnchorPolicyV1 {
     pub forbid_algebraic_hash_root: bool,
 }
 
-/// Offline anchor binding a HyperIntel assurance envelope to a hash-based PQAI root.
+/// Offline anchor binding a `HyperIntel` assurance envelope to a hash-based PQAI root.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PqaiAssuranceAnchorV1 {
     /// Fixed schema identifier.
     pub schema_version: String,
-    /// Digest of the bound HyperIntel `AssuranceEnvelopeV1`.
+    /// Digest of the bound `HyperIntel` `AssuranceEnvelopeV1`.
     pub assurance_envelope_digest: Sha256Digest,
     /// Digest of the bound subject (e.g. `SignedStatementV1` or evidence set).
     pub subject_digest: Sha256Digest,
@@ -206,9 +206,16 @@ mod tests {
     #[test]
     fn valid_slh_dsa_anchor_verifies() {
         let anchor = valid_anchor();
-        let verified = verify_pqai_assurance_anchor_v1(&anchor, strict_policy()).expect("verify");
-        assert_eq!(verified.root_posture, PqaiHashRootPostureV1::HashOnlyPqai);
-        assert_eq!(verified.anchor_commitment_hex, anchor.anchor_commitment_hex);
+        let expected = VerifiedPqaiAnchorV1 {
+            assurance_envelope_digest: anchor.assurance_envelope_digest,
+            subject_digest: anchor.subject_digest,
+            root_posture: PqaiHashRootPostureV1::HashOnlyPqai,
+            anchor_commitment_hex: anchor.anchor_commitment_hex.clone(),
+        };
+        assert_eq!(
+            verify_pqai_assurance_anchor_v1(&anchor, strict_policy()),
+            Ok(expected)
+        );
     }
 
     #[test]
