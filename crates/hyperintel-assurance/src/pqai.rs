@@ -156,9 +156,7 @@ pub fn verify_pqai_assurance_anchor_v1(
     {
         return Err(PqaiAnchorError::InvalidRootAlgorithm);
     }
-    if policy.require_hash_only_root
-        && anchor.root_posture != PqaiHashRootPostureV1::HashOnlyPqai
-    {
+    if policy.require_hash_only_root && anchor.root_posture != PqaiHashRootPostureV1::HashOnlyPqai {
         return Err(PqaiAnchorError::InsufficientPosture);
     }
     if policy.forbid_algebraic_hash_root
